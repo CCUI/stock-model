@@ -97,28 +97,64 @@ class UKStockDataCollector:
     def _get_news_sentiment(self, symbol, date):
         """Collect and analyze news sentiment for a given stock"""
         try:
-            # Get news articles from Alpha Vantage
+            # Validate API key before making the API call
+            if not self.api_key or self.api_key == 'demo':
+                raise ValueError("Please set ALPHA_VANTAGE_API_KEY environment variable with a valid API key.")
+            
+            # Get news articles from Alpha Vantage with error handling
             url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&apikey={self.api_key}"
             response = requests.get(url)
+            response.raise_for_status()  # Raise exception for bad status codes
             news_data = response.json()
             
+            if 'Note' in news_data:  # Check for rate limit message
+                raise Exception(f"Rate limit reached for {symbol}: {news_data['Note']}")
+            
             if 'feed' not in news_data:
-                return pd.DataFrame()
+                raise ValueError(f"No news feed data available for {symbol}")
             
             sentiments = []
             for article in news_data['feed']:
+                # Convert article date to datetime
+                article_date = datetime.strptime(article['time_published'], '%Y%m%dT%H%M%S')
+                
+                # Only consider articles from the last 7 days
+                if (date - article_date).days > 7:
+                    continue
+                
                 # Use FinBERT for sentiment analysis
                 inputs = self.tokenizer(article['title'], return_tensors="pt", padding=True, truncation=True)
                 outputs = self.sentiment_model(**inputs)
-                sentiment_score = torch.softmax(outputs.logits, dim=1)
+                probabilities = torch.softmax(outputs.logits, dim=1)
+                
+                # FinBERT output: [negative, neutral, positive]
+                sentiment_score = float(probabilities[0][2].item() - probabilities[0][0].item())  # Ensure float type
                 
                 sentiments.append({
-                    'date': article['time_published'],
-                    'sentiment_score': sentiment_score[0][1].item()  # Positive sentiment score
+                    'date': article_date,
+                    'sentiment_score': sentiment_score  # Range from -1 to 1
                 })
             
-            return pd.DataFrame(sentiments)
+            if not sentiments:
+                return pd.DataFrame({'sentiment_score': [0.0]})  # Return float
+                
+            # For single article case, return the sentiment directly
+            if len(sentiments) == 1:
+                return pd.DataFrame({'sentiment_score': [float(sentiments[0]['sentiment_score'])]})  # Ensure float
+                
+            sentiment_df = pd.DataFrame(sentiments)
+            # Weight recent sentiment more heavily
+            sentiment_df['weight'] = sentiment_df['date'].apply(lambda x: 1 / (1 + (date - x).days))
+            weighted_sentiment = float((sentiment_df['sentiment_score'] * sentiment_df['weight']).sum() / sentiment_df['weight'].sum())  # Ensure float
             
+            return pd.DataFrame({'sentiment_score': [weighted_sentiment]})
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Network error getting news sentiment for {symbol}: {str(e)}")
+            return pd.DataFrame({'sentiment_score': [0]})
+        except ValueError as e:
+            print(f"Value error getting news sentiment for {symbol}: {str(e)}")
+            return pd.DataFrame({'sentiment_score': [0]})
         except Exception as e:
             print(f"Error getting news sentiment for {symbol}: {str(e)}")
-            return pd.DataFrame()
+            return pd.DataFrame({'sentiment_score': [0]})

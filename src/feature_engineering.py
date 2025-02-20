@@ -122,8 +122,8 @@ class FeatureEngineer:
     
     def _scale_features(self, df):
         """Scale numerical features"""
-        # Columns to scale
-        cols_to_scale = ['RSI', 'MACD', 'MFI', 'ADX', 'ATR', 'OBV',
+        # Columns to scale (excluding RSI, MACD, MFI as they have their own ranges)
+        cols_to_scale = ['ADX', 'ATR', 'OBV',
                         'Returns', 'Returns_5d', 'Returns_20d',
                         'Volatility_5d', 'Volatility_20d']
         
