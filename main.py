@@ -1,13 +1,13 @@
 import os
 import pandas as pd
 from datetime import datetime, timedelta
-from src.data_collector import UKStockDataCollector
+from src.data_collector import UKStockDataCollector, USStockDataCollector
 from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.predictor import StockPredictor
 from src.utils import setup_logging, get_uk_trading_day
 
-def main(analysis_date=None):
+def main(market='UK', analysis_date=None, include_news_sentiment=True):
     # Setup logging
     logger = setup_logging()
     
@@ -15,17 +15,23 @@ def main(analysis_date=None):
     if analysis_date is None:
         analysis_date = get_uk_trading_day(datetime.now() - timedelta(days=1))
     
-    logger.info(f"Starting analysis for date: {analysis_date}")
+    logger.info(f"Starting analysis for {market} market on date: {analysis_date}")
     
     try:
         # Initialize components
-        data_collector = UKStockDataCollector()
+        if market.upper() == 'UK':
+            data_collector = UKStockDataCollector(include_news_sentiment=include_news_sentiment)
+        elif market.upper() == 'US':
+            data_collector = USStockDataCollector(include_news_sentiment=include_news_sentiment)
+        else:
+            raise ValueError(f"Unsupported market: {market}. Available markets: UK, US")
+            
         feature_engineer = FeatureEngineer()
         model_trainer = ModelTrainer()
         predictor = StockPredictor()
         
-        # Collect historical data for all UK stocks
-        logger.info("Collecting historical stock data...")
+        # Collect historical data for selected market
+        logger.info(f"Collecting historical stock data for {market} market...")
         stock_data = data_collector.collect_historical_data(end_date=analysis_date)
         
         # Generate features
@@ -44,7 +50,7 @@ def main(analysis_date=None):
         logger.info("Generating analysis report...")
         report = predictor.generate_analysis_report(predictions, features_df)
         
-        print("\nTop 5 Predicted Gainers for Tomorrow:")
+        print(f"\nTop 5 Predicted Gainers for Tomorrow ({market} Market):")
         print("=====================================\n")
         print(report)
         
@@ -55,4 +61,19 @@ def main(analysis_date=None):
         raise
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Stock Market Analysis Tool')
+    parser.add_argument('--market', type=str, choices=['UK', 'US'], default='UK',
+                        help='Market to analyze (UK or US)')
+    parser.add_argument('--no-news', action='store_false', dest='include_news_sentiment',
+                        help='Disable news sentiment analysis')
+    parser.add_argument('--date', type=str, help='Analysis date (YYYY-MM-DD format)')
+    
+    args = parser.parse_args()
+    
+    analysis_date = None
+    if args.date:
+        analysis_date = datetime.strptime(args.date, '%Y-%m-%d')
+    
+    main(market=args.market, analysis_date=analysis_date, include_news_sentiment=args.include_news_sentiment)

@@ -14,7 +14,8 @@ class StockPredictor:
             'Returns', 'Returns_5d', 'Returns_20d',
             'Volatility_5d', 'Volatility_20d',
             'Price_to_VWAP', 'marketCap', 'trailingPE',
-            'priceToBook', 'debtToEquity', 'news_sentiment'
+            'priceToBook', 'debtToEquity', 'news_sentiment',
+            'Price_to_Fib', 'Price_to_Pivot'
         ]
         
         X = latest_data[feature_cols]

@@ -61,6 +61,25 @@ class FeatureEngineer:
                 group['BB_MIDDLE'] = sma
                 group['BB_LOWER'] = sma - (std * 2)
                 
+                # Fibonacci Retracements
+                high = group['High'].rolling(window=20).max()
+                low = group['Low'].rolling(window=20).min()
+                diff = high - low
+                group['Fib_236'] = high - (diff * 0.236)
+                group['Fib_382'] = high - (diff * 0.382)
+                group['Fib_618'] = high - (diff * 0.618)
+                
+                # Pivot Points
+                group['PP'] = (group['High'] + group['Low'] + group['Close']) / 3
+                group['R1'] = (2 * group['PP']) - group['Low']
+                group['S1'] = (2 * group['PP']) - group['High']
+                group['R2'] = group['PP'] + (group['High'] - group['Low'])
+                group['S2'] = group['PP'] - (group['High'] - group['Low'])
+                
+                # Price relative to Fibonacci levels and Pivot Points
+                group['Price_to_Fib'] = (group['Close'] - group['Fib_618']) / (group['Fib_236'] - group['Fib_618'])
+                group['Price_to_Pivot'] = (group['Close'] - group['S2']) / (group['R2'] - group['S2'])
+                
                 # Volume indicators
                 group['OBV'] = (group['Volume'] * (~group['Close'].diff().le(0) * 2 - 1)).cumsum()
                 group['VWAP'] = (group['Close'] * group['Volume']).cumsum() / group['Volume'].cumsum()
@@ -95,27 +114,38 @@ class FeatureEngineer:
         return features_df
     
     def _handle_missing_values(self, df):
-        """Handle missing values in the features"""
+        """Handle missing values and infinite values in the features"""
         # Forward fill for technical indicators
         technical_cols = ['RSI', 'MACD', 'MFI', 'EMA_20', 'SMA_50', 'ADX', 'ATR',
                          'BB_UPPER', 'BB_MIDDLE', 'BB_LOWER', 'OBV', 'VWAP']
-        df[technical_cols] = df[technical_cols].fillna(method='ffill')
+        df[technical_cols] = df[technical_cols].ffill()
         
         # Fill remaining missing values with median and convert to float
         numerical_cols = df.select_dtypes(include=[np.number]).columns
         for col in numerical_cols:
-            df[col] = df[col].fillna(df[col].median())
+            median_val = df[col].median()
+            df[col] = df[col].fillna(median_val)
+            # Replace infinite values with median
+            df[col] = df[col].replace([np.inf, -np.inf], median_val)
         
-        # Convert all feature columns to float type
+        # Convert all feature columns to float type and handle special values
         feature_cols = ['RSI', 'MACD', 'MFI', 'ADX', 'ATR', 'OBV',
                        'Returns', 'Returns_5d', 'Returns_20d',
                        'Volatility_5d', 'Volatility_20d',
                        'Price_to_VWAP', 'marketCap', 'trailingPE',
-                       'priceToBook', 'debtToEquity', 'news_sentiment']
+                       'priceToBook', 'debtToEquity', 'news_sentiment',
+                       'Price_to_Fib', 'Price_to_Pivot']
         
         for col in feature_cols:
+            # Convert to numeric, coerce errors to NaN
             df[col] = pd.to_numeric(df[col], errors='coerce')
-            df[col] = df[col].fillna(df[col].median())
+            # Calculate median excluding NaN and infinite values
+            valid_median = df[col][~np.isinf(df[col])].median()
+            # Replace NaN and infinite values with valid median
+            df[col] = df[col].replace([np.inf, -np.inf], valid_median)
+            df[col] = df[col].fillna(valid_median)
+            # Ensure all values are finite
+            df[col] = df[col].clip(-1e300, 1e300)
             df[col] = df[col].astype(float)
         
         return df
