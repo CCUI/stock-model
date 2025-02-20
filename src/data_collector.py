@@ -3,18 +3,33 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-from textblob import TextBlob
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import os
+from dotenv import load_dotenv
+from pathlib import Path
+import time
+
+# Load environment variables from the correct path
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 class UKStockDataCollector:
     def __init__(self):
         self.ftse_symbols = self._get_ftse_symbols()
         self.sentiment_model = AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')
         self.tokenizer = AutoTokenizer.from_pretrained('ProsusAI/finbert')
-        self.api_key = os.getenv('ALPHA_VANTAGE_API_KEY', 'demo')
-    
+        
+        # Get NewsAPI key from environment variable
+        self.news_api_key = os.getenv('NEWS_API_KEY')
+        if not self.news_api_key:
+            raise ValueError("NEWS_API_KEY not found in environment variables")
+            
+        # Initialize cache for news data
+        self.news_cache = {}
+        self.last_api_call = 0
+        self.api_call_delay = 1  # Delay between API calls in seconds
+            
     def _get_ftse_symbols(self):
         """Get list of FTSE stocks"""
         # Only FTSE 100 components for testing
@@ -72,7 +87,7 @@ class UKStockDataCollector:
                             hist_data[key] = info.get(key, 0)  # Use 0 instead of None for missing values
                         
                         # Get news sentiment
-                        news = self._get_news_sentiment(symbol, end_date)
+                        news = self._get_news_sentiment(symbol)
                         hist_data['news_sentiment'] = news['sentiment_score'].mean() if not news.empty else 0
                         
                         all_data[symbol] = hist_data
@@ -80,7 +95,6 @@ class UKStockDataCollector:
                     
                 except Exception as e:
                     if 'Too Many Requests' in str(e) and attempt < max_retries - 1:
-                        import time
                         time.sleep(delay * (attempt + 1))  # Exponential backoff
                         continue
                     print(f"Error collecting data for {symbol}: {str(e)}")
@@ -92,69 +106,110 @@ class UKStockDataCollector:
             
         return pd.concat(all_data.values(), axis=0)
         
-        return pd.concat(all_data.values(), axis=0)
-    
-    def _get_news_sentiment(self, symbol, date):
+    def _get_news_sentiment(self, symbol: str) -> pd.DataFrame:
         """Collect and analyze news sentiment for a given stock"""
         try:
-            # Validate API key before making the API call
-            if not self.api_key or self.api_key == 'demo':
-                raise ValueError("Please set ALPHA_VANTAGE_API_KEY environment variable with a valid API key.")
+            # Remove .L suffix and get company name
+            clean_symbol = symbol.replace('.L', '')
+            company_name = self._get_company_name(clean_symbol)
             
-            # Get news articles from Alpha Vantage with error handling
-            url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&apikey={self.api_key}"
-            response = requests.get(url)
-            response.raise_for_status()  # Raise exception for bad status codes
-            news_data = response.json()
+            # Check cache first
+            if company_name in self.news_cache:
+                return self.news_cache[company_name]
             
-            if 'Note' in news_data:  # Check for rate limit message
-                raise Exception(f"Rate limit reached for {symbol}: {news_data['Note']}")
+            # Implement rate limiting
+            current_time = time.time()
+            if current_time - self.last_api_call < self.api_call_delay:
+                time.sleep(self.api_call_delay - (current_time - self.last_api_call))
             
-            if 'feed' not in news_data:
-                raise ValueError(f"No news feed data available for {symbol}")
+            # Get news from NewsAPI
+            url = f"https://newsapi.org/v2/everything"
+            params = {
+                'q': f'"{company_name}" AND (stock OR shares OR market)',
+                'language': 'en',
+                'sortBy': 'publishedAt',
+                'pageSize': 10,  # Limit to 10 articles per company
+                'apiKey': self.news_api_key
+            }
+            
+            response = requests.get(url, params=params)
+            self.last_api_call = time.time()
+            
+            if response.status_code != 200:
+                print(f"Error fetching news for {company_name}: {response.status_code}")
+                return pd.DataFrame({'sentiment_score': [0.0]})
+            
+            data = response.json()
+            
+            if data['totalResults'] == 0:
+                return pd.DataFrame({'sentiment_score': [0.0]})
             
             sentiments = []
-            for article in news_data['feed']:
-                # Convert article date to datetime
-                article_date = datetime.strptime(article['time_published'], '%Y%m%dT%H%M%S')
-                
-                # Only consider articles from the last 7 days
-                if (date - article_date).days > 7:
-                    continue
+            for article in data['articles']:
+                # Combine title and description for better sentiment analysis
+                text = f"{article['title']} {article['description'] or ''}"
                 
                 # Use FinBERT for sentiment analysis
-                inputs = self.tokenizer(article['title'], return_tensors="pt", padding=True, truncation=True)
+                inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
                 outputs = self.sentiment_model(**inputs)
                 probabilities = torch.softmax(outputs.logits, dim=1)
                 
-                # FinBERT output: [negative, neutral, positive]
-                sentiment_score = float(probabilities[0][2].item() - probabilities[0][0].item())  # Ensure float type
+                # Calculate sentiment score (-1 to 1)
+                sentiment_score = float(probabilities[0][2].item() - probabilities[0][0].item())
                 
                 sentiments.append({
-                    'date': article_date,
-                    'sentiment_score': sentiment_score  # Range from -1 to 1
+                    'date': datetime.strptime(article['publishedAt'], '%Y-%m-%dT%H:%M:%SZ'),
+                    'sentiment_score': sentiment_score
                 })
             
             if not sentiments:
-                return pd.DataFrame({'sentiment_score': [0.0]})  # Return float
-                
-            # For single article case, return the sentiment directly
-            if len(sentiments) == 1:
-                return pd.DataFrame({'sentiment_score': [float(sentiments[0]['sentiment_score'])]})  # Ensure float
-                
+                return pd.DataFrame({'sentiment_score': [0.0]})
+            
+            # Calculate weighted sentiment (more recent articles have higher weight)
             sentiment_df = pd.DataFrame(sentiments)
-            # Weight recent sentiment more heavily
-            sentiment_df['weight'] = sentiment_df['date'].apply(lambda x: 1 / (1 + (date - x).days))
-            weighted_sentiment = float((sentiment_df['sentiment_score'] * sentiment_df['weight']).sum() / sentiment_df['weight'].sum())  # Ensure float
+            sentiment_df['weight'] = sentiment_df['date'].apply(
+                lambda x: 1 / (1 + (datetime.now() - x).days)
+            )
+            weighted_sentiment = float(
+                (sentiment_df['sentiment_score'] * sentiment_df['weight']).sum() 
+                / sentiment_df['weight'].sum()
+            )
             
-            return pd.DataFrame({'sentiment_score': [weighted_sentiment]})
+            result = pd.DataFrame({'sentiment_score': [weighted_sentiment]})
             
-        except requests.exceptions.RequestException as e:
-            print(f"Network error getting news sentiment for {symbol}: {str(e)}")
-            return pd.DataFrame({'sentiment_score': [0]})
-        except ValueError as e:
-            print(f"Value error getting news sentiment for {symbol}: {str(e)}")
-            return pd.DataFrame({'sentiment_score': [0]})
+            # Cache the result
+            self.news_cache[company_name] = result
+            
+            return result
+            
         except Exception as e:
             print(f"Error getting news sentiment for {symbol}: {str(e)}")
-            return pd.DataFrame({'sentiment_score': [0]})
+            return pd.DataFrame({'sentiment_score': [0.0]})
+    
+    def _get_company_name(self, symbol: str) -> str:
+        """Get company name from symbol using Wikipedia data"""
+        try:
+            # First check if we already have the mapping
+            if hasattr(self, 'symbol_to_name_map'):
+                return self.symbol_to_name_map.get(symbol, symbol)
+            
+            # Create the mapping
+            self.symbol_to_name_map = {}
+            response = requests.get("https://en.wikipedia.org/wiki/FTSE_100_Index")
+            soup = BeautifulSoup(response.text, 'html.parser')
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            
+            for table in tables:
+                rows = table.find_all('tr')[1:]
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) >= 2:
+                        company_name = cols[0].text.strip()
+                        symbol_text = cols[1].text.strip()
+                        self.symbol_to_name_map[symbol_text] = company_name
+            
+            return self.symbol_to_name_map.get(symbol, symbol)
+            
+        except Exception as e:
+            print(f"Error getting company name for {symbol}: {str(e)}")
+            return symbol
