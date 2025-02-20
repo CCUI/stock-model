@@ -44,8 +44,15 @@ class StockPredictor:
             trend_strength = self._calculate_trend_strength(stock_data)
             risk_score = self._calculate_risk_score(stock_data)
             
+            # Calculate predicted price
+            current_price = latest_data['Close']
+            predicted_return = predictions.loc[symbol, 'predicted_return']
+            predicted_price = current_price * (1 + predicted_return)
+            
             # Generate report for each stock
-            stock_report = f"\n{symbol} - Predicted Return: {predictions.loc[symbol, 'predicted_return']*100:.2f}%\n"
+            stock_report = f"\n{symbol}\n"
+            stock_report += f"Current Price: £{current_price:.2f}\n"
+            stock_report += f"Predicted Price: £{predicted_price:.2f} (Return: {predicted_return*100:.2f}%)\n"
             stock_report += "=" * 50 + "\n"
             
             # Technical Analysis
