@@ -6,10 +6,14 @@ from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.predictor import StockPredictor
 from src.utils import setup_logging, get_uk_trading_day
+from src.load_env import load_environment_variables
 
 def main(market='UK', analysis_date=None, include_news_sentiment=True):
     # Setup logging
     logger = setup_logging()
+    
+    # Load environment variables
+    load_environment_variables()
     
     # If no date provided, use the last trading day
     if analysis_date is None:

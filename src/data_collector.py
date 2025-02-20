@@ -11,10 +11,8 @@ from pathlib import Path
 import time
 from abc import ABC, abstractmethod
 from tqdm import tqdm
+import json
 
-# Load environment variables from the correct path
-env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
 
 class BaseStockDataCollector(ABC):
     def __init__(self, include_news_sentiment=True):
@@ -36,6 +34,10 @@ class BaseStockDataCollector(ABC):
             self.api_call_delay = 2  # Increased delay between API calls
             self.max_retries = 3  # Maximum number of retries for API calls
             self.backoff_factor = 2  # Exponential backoff factor
+            self.batch_size = 5  # Number of companies to batch in one API call
+            
+            # Load cached sentiment data from file
+            self._load_sentiment_cache()
     
     @abstractmethod
     def _get_symbols(self):
@@ -47,14 +49,88 @@ class BaseStockDataCollector(ABC):
         """Get company name from symbol"""
         pass
     
+    def _load_historical_cache(self):
+        """Load historical data cache from local file"""
+        cache_file = Path(__file__).parent.parent / 'data' / 'historical_cache.json'
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                    # Convert the loaded data back to DataFrame format
+                    self.historical_cache = {}
+                    for symbol, data in cache_data.items():
+                        try:
+                            df = pd.DataFrame(data['data'])
+                            df.index = pd.to_datetime(df.index)
+                            self.historical_cache[symbol] = {
+                                'data': df,
+                                'timestamp': data['timestamp']
+                            }
+                        except Exception as e:
+                            print(f"Error loading historical cache for {symbol}: {str(e)}")
+            except Exception as e:
+                print(f"Error loading historical cache: {str(e)}")
+                self.historical_cache = {}
+        else:
+            # Create the data directory if it doesn't exist
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            self.historical_cache = {}
+    
+    def _save_historical_cache(self):
+        """Save historical data cache to local file"""
+        cache_file = Path(__file__).parent.parent / 'data' / 'historical_cache.json'
+        try:
+            # Convert DataFrame values to serializable format
+            cache_data = {}
+            for symbol, data in self.historical_cache.items():
+                try:
+                    # Convert DataFrame to records and handle Timestamp objects
+                    df_records = data['data'].reset_index()
+                    # Convert all Timestamp and datetime64 columns to ISO format strings
+                    for col in df_records.columns:
+                        if pd.api.types.is_datetime64_any_dtype(df_records[col]):
+                            df_records[col] = df_records[col].dt.strftime('%Y-%m-%dT%H:%M:%S')
+                    
+                    # Convert any remaining Timestamp objects in the data
+                    records = df_records.to_dict('records')
+                    for record in records:
+                        for key, value in record.items():
+                            if isinstance(value, (pd.Timestamp, datetime)):
+                                record[key] = value.strftime('%Y-%m-%dT%H:%M:%S')
+                    
+                    cache_data[symbol] = {
+                        'data': records,
+                        'timestamp': data['timestamp']
+                    }
+                except Exception as e:
+                    print(f"Error saving historical cache for {symbol}: {str(e)}")
+            
+            with open(cache_file, 'w') as f:
+                json.dump(cache_data, f)
+        except Exception as e:
+            print(f"Error saving historical cache: {str(e)}")
+    
     def collect_historical_data(self, end_date, lookback_days=365, max_retries=5, delay=2):
         """Collect historical price and fundamental data for stocks"""
         start_date = end_date - timedelta(days=lookback_days)
+        
+        # Initialize historical cache if not already done
+        if not hasattr(self, 'historical_cache'):
+            self._load_historical_cache()
         
         all_data = {}
         progress_bar = tqdm(self.symbols, desc='Collecting stock data', unit='stock')
         for symbol in progress_bar:
             progress_bar.set_description(f'Processing {symbol}')
+            
+            # Check cache first
+            if symbol in self.historical_cache:
+                cached_data = self.historical_cache[symbol]
+                cache_time = datetime.fromisoformat(cached_data['timestamp'])
+                if datetime.now() - cache_time < timedelta(hours=24):  # Cache valid for 24 hours
+                    all_data[symbol] = cached_data['data']
+                    continue
+            
             for attempt in range(max_retries):
                 try:
                     # Get price data
@@ -77,6 +153,15 @@ class BaseStockDataCollector(ABC):
                         else:
                             hist_data['news_sentiment'] = 0  # Default value when news sentiment is disabled
                         
+                        # Update cache
+                        self.historical_cache[symbol] = {
+                            'data': hist_data,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        
+                        # Save cache after each successful update
+                        self._save_historical_cache()
+                        
                         all_data[symbol] = hist_data
                         break  # Successfully got data, break retry loop
                     
@@ -98,8 +183,52 @@ class BaseStockDataCollector(ABC):
         # Ensure we have at least some data before concatenating
         if not all_data:
             raise ValueError("No data could be collected for any symbols")
+        
+        # Save cache one final time after all data is collected
+        self._save_historical_cache()
             
         return pd.concat(all_data.values(), axis=0)
+    
+    def _load_sentiment_cache(self):
+        """Load sentiment cache from local file"""
+        cache_file = Path(__file__).parent.parent / 'data' / 'sentiment_cache.json'
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                    # Convert the loaded data back to DataFrame format
+                    self.news_cache = {k: pd.DataFrame({'sentiment_score': [v['sentiment_score']],
+                                                      'timestamp': [v['timestamp']]})
+                                      for k, v in cache_data.items()}
+            except Exception as e:
+                print(f"Error loading sentiment cache: {str(e)}")
+                self.news_cache = {}
+        else:
+            # Create the data directory if it doesn't exist
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            self.news_cache = {}
+    
+    def _save_sentiment_cache(self):
+        """Save sentiment cache to local file"""
+        cache_file = Path(__file__).parent.parent / 'data' / 'sentiment_cache.json'
+        try:
+            # Convert DataFrame values to serializable format
+            cache_data = {}
+            for k, v in self.news_cache.items():
+                # Ensure sentiment_score is a native Python float
+                sentiment_score = float(v['sentiment_score'].iloc[0]) if isinstance(v['sentiment_score'], pd.Series) else float(v['sentiment_score'])
+                # Get timestamp, defaulting to current time if not present
+                timestamp = v['timestamp'].iloc[0] if isinstance(v['timestamp'], pd.Series) else v.get('timestamp', datetime.now().isoformat())
+                
+                cache_data[k] = {
+                    'sentiment_score': sentiment_score,
+                    'timestamp': timestamp
+                }
+                
+            with open(cache_file, 'w') as f:
+                json.dump(cache_data, f)
+        except Exception as e:
+            print(f"Error saving sentiment cache: {str(e)}")
     
     def _get_news_sentiment(self, symbol: str) -> pd.DataFrame:
         """Collect and analyze news sentiment for a given stock"""
@@ -108,7 +237,12 @@ class BaseStockDataCollector(ABC):
             
             # Check cache first
             if company_name in self.news_cache:
-                return self.news_cache[company_name]
+                cached_data = self.news_cache[company_name]
+                # Check if cached data is less than 24 hours old
+                if 'timestamp' in cached_data:
+                    cache_time = datetime.fromisoformat(cached_data['timestamp'])
+                    if datetime.now() - cache_time < timedelta(hours=24):
+                        return cached_data
             
             # Implement enhanced rate limiting with retries
             for attempt in range(self.max_retries):
@@ -146,12 +280,12 @@ class BaseStockDataCollector(ABC):
             
             if response.status_code != 200:
                 print(f"Error fetching news for {company_name}: {response.status_code}")
-                return pd.DataFrame({'sentiment_score': [0.0]})
+                return pd.DataFrame({'sentiment_score': [0.0], 'timestamp': datetime.now().isoformat()})
             
             data = response.json()
             
             if data['totalResults'] == 0:
-                return pd.DataFrame({'sentiment_score': [0.0]})
+                return pd.DataFrame({'sentiment_score': [0.0], 'timestamp': datetime.now().isoformat()})
             
             sentiments = []
             for article in data['articles']:
@@ -172,7 +306,7 @@ class BaseStockDataCollector(ABC):
                 })
             
             if not sentiments:
-                return pd.DataFrame({'sentiment_score': [0.0]})
+                return pd.DataFrame({'sentiment_score': [0.0], 'timestamp': datetime.now().isoformat()})
             
             # Calculate weighted sentiment (more recent articles have higher weight)
             sentiment_df = pd.DataFrame(sentiments)
@@ -184,16 +318,22 @@ class BaseStockDataCollector(ABC):
                 / sentiment_df['weight'].sum()
             )
             
-            result = pd.DataFrame({'sentiment_score': [weighted_sentiment]})
+            result = pd.DataFrame({
+                'sentiment_score': [weighted_sentiment],
+                'timestamp': datetime.now().isoformat()
+            })
             
             # Cache the result
             self.news_cache[company_name] = result
+            
+            # Save updated cache to file
+            self._save_sentiment_cache()
             
             return result
             
         except Exception as e:
             print(f"Error getting news sentiment for {symbol}: {str(e)}")
-            return pd.DataFrame({'sentiment_score': [0.0]})
+            return pd.DataFrame({'sentiment_score': [0.0], 'timestamp': datetime.now().isoformat()})
 
 class UKStockDataCollector(BaseStockDataCollector):
     def _get_symbols(self):
