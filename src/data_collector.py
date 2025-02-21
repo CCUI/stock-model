@@ -12,12 +12,15 @@ import time
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 import json
+from .data_manager import DataManager
 
 
 class BaseStockDataCollector(ABC):
-    def __init__(self, include_news_sentiment=True):
+    def __init__(self, market='UK', include_news_sentiment=True):
+        self.market = market.upper()
         self.include_news_sentiment = include_news_sentiment
         self.symbols = self._get_symbols()
+        self.data_manager = DataManager(market=self.market)
         
         if include_news_sentiment:
             self.sentiment_model = AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')
@@ -29,7 +32,7 @@ class BaseStockDataCollector(ABC):
                 raise ValueError("NEWS_API_KEY not found in environment variables")
                 
             # Initialize cache for news data
-            self.news_cache = {}
+            self.news_cache = self.data_manager.load_sentiment_data()
             self.last_api_call = 0
             self.api_call_delay = 2  # Increased delay between API calls
             self.max_retries = 3  # Maximum number of retries for API calls
@@ -114,12 +117,11 @@ class BaseStockDataCollector(ABC):
         """Collect historical price and fundamental data for stocks"""
         start_date = end_date - timedelta(days=lookback_days)
         
-        # Initialize historical cache if not already done
-        if not hasattr(self, 'historical_cache'):
-            self._load_historical_cache()
+        # Load historical cache
+        self.historical_cache = self.data_manager.load_historical_data()
         
         all_data = {}
-        progress_bar = tqdm(self.symbols, desc='Collecting stock data', unit='stock')
+        progress_bar = tqdm(self.symbols, desc=f'Collecting {self.market} stock data', unit='stock')
         for symbol in progress_bar:
             progress_bar.set_description(f'Processing {symbol}')
             
@@ -177,17 +179,22 @@ class BaseStockDataCollector(ABC):
                 
                 # Add delay between successful requests to prevent rate limiting
                 time.sleep(delay)
-        
-        progress_bar.close()
-        
-        # Ensure we have at least some data before concatenating
-        if not all_data:
-            raise ValueError("No data could be collected for any symbols")
-        
-        # Save cache one final time after all data is collected
-        self._save_historical_cache()
             
-        return pd.concat(all_data.values(), axis=0)
+            # Save data periodically to prevent memory issues
+            if len(all_data) >= self.data_manager.chunk_size:
+                self.data_manager.save_historical_data(all_data)
+                all_data = {}
+        
+        # Save any remaining data
+        if all_data:
+            self.data_manager.save_historical_data(all_data)
+        
+        # Save sentiment cache if used
+        if self.include_news_sentiment:
+            self.data_manager.save_sentiment_data(self.news_cache)
+        
+        # Return combined data from all chunks
+        return pd.concat(self.data_manager.load_historical_data().values())
     
     def _load_sentiment_cache(self):
         """Load sentiment cache from local file"""
