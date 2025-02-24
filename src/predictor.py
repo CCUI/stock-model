@@ -3,22 +3,28 @@ import numpy as np
 from datetime import datetime
 
 class StockPredictor:
+    def __init__(self):
+        # Define feature columns to ensure consistency across components
+        self.feature_cols = [
+            'RSI', 'MACD', 'MFI', 'ADX', 'ATR', 'OBV',
+            'Returns', 'Returns_5d', 'Returns_20d',
+            'Volatility_5d', 'Volatility_20d',
+            'Price_to_VWAP', 'marketCap', 'trailingPE',
+            'priceToBook', 'debtToEquity', 'news_sentiment'
+        ]
+    
     def predict_top_gainers(self, model, features_df, top_n=5):
         """Predict top gaining stocks for the next day"""
         # Get the latest data for each stock
         latest_data = features_df.groupby('Symbol').last()
         
-        # Prepare features for prediction
-        feature_cols = [
-            'RSI', 'MACD', 'MFI', 'ADX', 'ATR', 'OBV',
-            'Returns', 'Returns_5d', 'Returns_20d',
-            'Volatility_5d', 'Volatility_20d',
-            'Price_to_VWAP', 'marketCap', 'trailingPE',
-            'priceToBook', 'debtToEquity', 'news_sentiment',
-            'Price_to_Fib', 'Price_to_Pivot'
-        ]
+        # Ensure all required features exist
+        for col in self.feature_cols:
+            if col not in latest_data.columns:
+                latest_data[col] = 0.0
         
-        X = latest_data[feature_cols]
+        # Prepare features for prediction
+        X = latest_data[self.feature_cols]
         
         # Make predictions
         predictions = model.predict(X)
@@ -98,32 +104,59 @@ class StockPredictor:
         return max(0, min(10, momentum_score))  # Scale to 0-10
     
     def _calculate_trend_strength(self, stock_data):
-        """Calculate trend strength based on moving averages and ADX"""
-        latest = stock_data.iloc[-1]
-        
-        # Check if price is above moving averages
-        above_ema20 = latest['Close'] > latest['EMA_20']
-        above_sma50 = latest['Close'] > latest['SMA_50']
-        
-        # Normalize ADX (0-100 scale)
-        adx_score = latest['ADX'] / 10
-        
-        # Combine signals
-        trend_score = (above_ema20 * 0.3 + above_sma50 * 0.3 + adx_score * 0.4) * 10
-        return max(0, min(10, trend_score))  # Scale to 0-10
+        """Calculate trend strength based on multiple indicators"""
+        try:
+            latest = stock_data.iloc[-1]
+            
+            # Price momentum
+            price_score = 0
+            if 'Returns_5d' in latest and 'Returns_20d' in latest:
+                price_score = (latest['Returns_5d'] * 0.6 + latest['Returns_20d'] * 0.4) * 10
+            
+            # RSI trend
+            rsi_score = 0
+            if 'RSI' in latest:
+                rsi_score = (latest['RSI'] - 50) / 5  # Convert RSI to -10 to +10 scale
+            
+            # MACD trend
+            macd_score = 0
+            if 'MACD' in latest:
+                macd_score = 10 if latest['MACD'] > 0 else -10
+            
+            # Volume trend
+            volume_score = 0
+            if 'OBV' in latest:
+                volume_score = 10 if latest['OBV'] > 0 else -10
+            
+            # Combine scores
+            trend_score = (price_score + rsi_score + macd_score + volume_score) / 4
+            
+            # Scale to 0-10 range
+            return max(0, min(10, trend_score + 5))
+            
+        except Exception as e:
+            print(f"Error calculating trend strength: {str(e)}")
+            return 5.0  # Return neutral score on error
     
     def _calculate_risk_score(self, stock_data):
         """Calculate risk score based on volatility and price stability"""
-        latest = stock_data.iloc[-1]
-        
-        # Normalize volatility measures
-        vol_5d_score = 10 - (latest['Volatility_5d'] * 100)  # Lower volatility = better score
-        vol_20d_score = 10 - (latest['Volatility_20d'] * 100)
-        
-        # Consider price stability relative to Bollinger Bands
-        bb_position = (latest['Close'] - latest['BB_LOWER']) / (latest['BB_UPPER'] - latest['BB_LOWER'])
-        bb_score = 10 - abs(bb_position - 0.5) * 20  # Center position = better score
-        
-        # Combine scores
-        risk_score = (vol_5d_score * 0.3 + vol_20d_score * 0.3 + bb_score * 0.4)
-        return max(0, min(10, risk_score))  # Scale to 0-10
+        try:
+            latest = stock_data.iloc[-1]
+            
+            # Normalize volatility measures
+            vol_5d_score = 10 - (latest['Volatility_5d'] * 100)  # Lower volatility = better score
+            vol_20d_score = 10 - (latest['Volatility_20d'] * 100)
+            
+            # Consider price stability relative to Bollinger Bands if available
+            bb_score = 5.0  # Default neutral score
+            if all(col in latest.index for col in ['BB_UPPER', 'BB_LOWER', 'BB_MIDDLE']):
+                bb_position = (latest['Close'] - latest['BB_LOWER']) / (latest['BB_UPPER'] - latest['BB_LOWER'])
+                bb_score = 10 - abs(bb_position - 0.5) * 20  # Center position = better score
+            
+            # Combine scores
+            risk_score = (vol_5d_score * 0.4 + vol_20d_score * 0.4 + bb_score * 0.2)
+            return max(0, min(10, risk_score))  # Scale to 0-10
+            
+        except Exception as e:
+            print(f"Error calculating risk score: {str(e)}")
+            return 5.0  # Return neutral score on error

@@ -7,13 +7,14 @@ from src.model_trainer import ModelTrainer
 from src.predictor import StockPredictor
 from src.utils import setup_logging, get_uk_trading_day
 from src.load_env import load_environment_variables
+import argparse
 
 def main(market='UK', analysis_date=None, include_news_sentiment=True):
-    # Setup logging
-    logger = setup_logging()
-    
     # Load environment variables
     load_environment_variables()
+    
+    # Setup logging
+    logger = setup_logging()
     
     # If no date provided, use the last trading day
     if analysis_date is None:
@@ -24,9 +25,9 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
     try:
         # Initialize components
         if market.upper() == 'UK':
-            data_collector = UKStockDataCollector(include_news_sentiment=include_news_sentiment)
+            data_collector = UKStockDataCollector(market='UK', include_news_sentiment=include_news_sentiment)
         elif market.upper() == 'US':
-            data_collector = USStockDataCollector(include_news_sentiment=include_news_sentiment)
+            data_collector = USStockDataCollector(market='US', include_news_sentiment=include_news_sentiment)
         else:
             raise ValueError(f"Unsupported market: {market}. Available markets: UK, US")
             
@@ -34,7 +35,7 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         model_trainer = ModelTrainer()
         predictor = StockPredictor()
         
-        # Collect historical data for selected market
+        # Collect historical data
         logger.info(f"Collecting historical stock data for {market} market...")
         stock_data = data_collector.collect_historical_data(end_date=analysis_date)
         
@@ -65,14 +66,13 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         raise
 
 if __name__ == "__main__":
-    import argparse
-    
     parser = argparse.ArgumentParser(description='Stock Market Analysis Tool')
     parser.add_argument('--market', type=str, choices=['UK', 'US'], default='UK',
-                        help='Market to analyze (UK or US)')
-    parser.add_argument('--no-news', action='store_false', dest='include_news_sentiment',
-                        help='Disable news sentiment analysis')
-    parser.add_argument('--date', type=str, help='Analysis date (YYYY-MM-DD format)')
+                      help='Market to analyze (UK or US)')
+    parser.add_argument('--no-news', action='store_true',
+                      help='Disable news sentiment analysis')
+    parser.add_argument('--date', type=str,
+                      help='Analysis date (YYYY-MM-DD format)')
     
     args = parser.parse_args()
     
@@ -80,4 +80,8 @@ if __name__ == "__main__":
     if args.date:
         analysis_date = datetime.strptime(args.date, '%Y-%m-%d')
     
-    main(market=args.market, analysis_date=analysis_date, include_news_sentiment=args.include_news_sentiment)
+    main(
+        market=args.market,
+        analysis_date=analysis_date,
+        include_news_sentiment=not args.no_news
+    )
