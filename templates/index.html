@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Market Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .progress {
+            height: 25px;
+        }
+        .report-section {
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Stock Market Analysis Tool</h1>
+        
+        <!-- Analysis Form -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form id="analysisForm">
+                    <div class="mb-3">
+                        <label for="market" class="form-label">Select Market</label>
+                        <select class="form-select" id="market" name="market" required>
+                            <option value="UK">UK (FTSE)</option>
+                            <option value="US">US (S&P 500)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="includeNews" name="include_news" checked>
+                            <label class="form-check-label" for="includeNews">
+                                Include News Sentiment Analysis
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Analysis Date (Optional)</label>
+                        <input type="date" class="form-control" id="date" name="date">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Start Analysis</button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Progress Section -->
+        <div id="progressSection" class="card mb-4 d-none">
+            <div class="card-body">
+                <h5 class="card-title">Analysis Progress</h5>
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         style="width: 0%" 
+                         id="progressBar">
+                        0%
+                    </div>
+                </div>
+                <p id="progressStatus" class="mb-0">Initializing...</p>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="resultsSection" class="card d-none">
+            <div class="card-body">
+                <h5 class="card-title">Analysis Results</h5>
+                <div id="reportContent" class="accordion mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('analysisForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Show progress section and hide previous results
+            document.getElementById('progressSection').classList.remove('d-none');
+            document.getElementById('resultsSection').classList.add('d-none');
+            document.getElementById('submitBtn').disabled = true;
+            
+            // Prepare form data
+            const formData = new FormData(this);
+            formData.set('include_news', document.getElementById('includeNews').checked);
+            
+            try {
+                // Start analysis
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('Analysis failed to start');
+                
+                // Start progress polling
+                pollProgress();
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+                document.getElementById('submitBtn').disabled = false;
+            }
+        });
+        
+        async function pollProgress() {
+            try {
+                const response = await fetch('/progress');
+                const data = await response.json();
+                
+                // Update progress bar
+                const progressBar = document.getElementById('progressBar');
+                progressBar.style.width = `${data.percentage}%`;
+                progressBar.textContent = `${data.percentage}%`;
+                
+                // Update status text
+                document.getElementById('progressStatus').textContent = data.step;
+                
+                if (data.status === 'complete') {
+                    // Show results
+                    document.getElementById('resultsSection').classList.remove('d-none');
+                    document.getElementById('reportContent').textContent = data.report;
+                    document.getElementById('submitBtn').disabled = false;
+                    return;
+                } else if (data.status === 'error') {
+                    alert('Error: ' + data.step);
+                    document.getElementById('submitBtn').disabled = false;
+                    return;
+                }
+                
+                // Continue polling
+                setTimeout(pollProgress, 1000);
+                
+            } catch (error) {
+                alert('Error checking progress: ' + error.message);
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
