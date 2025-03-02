@@ -38,7 +38,7 @@ class StockPredictor:
         return top_gainers
     
     def generate_analysis_report(self, predictions, features_df):
-        """Generate detailed analysis report for predicted top gainers"""
+        """Generate detailed analysis report for predicted top gainers in JSON format"""
         report = []
         
         for symbol in predictions.index:
@@ -55,40 +55,47 @@ class StockPredictor:
             predicted_return = predictions.loc[symbol, 'predicted_return']
             predicted_price = current_price * (1 + predicted_return)
             
-            # Generate report for each stock
-            stock_report = f"\n{symbol}\n"
-            stock_report += f"Current Price: £{current_price:.2f}\n"
-            stock_report += f"Predicted Price: £{predicted_price:.2f} (Return: {predicted_return*100:.2f}%)\n"
-            stock_report += "=" * 50 + "\n"
-            
-            # Technical Analysis
-            stock_report += "\nTechnical Analysis:\n"
-            stock_report += f"- RSI ({latest_data['RSI']:.2f}): {'Oversold' if latest_data['RSI'] < 30 else 'Overbought' if latest_data['RSI'] > 70 else 'Neutral'}\n"
-            stock_report += f"- MACD: {'Bullish' if latest_data['MACD'] > 0 else 'Bearish'} momentum\n"
-            stock_report += f"- Momentum Score: {momentum_score:.2f}/10\n"
-            stock_report += f"- Trend Strength: {trend_strength:.2f}/10\n"
-            
-            # Fundamental Analysis
-            stock_report += "\nFundamental Analysis:\n"
-            stock_report += f"- Market Cap: £{latest_data['marketCap']/1e6:.2f}M\n"
-            stock_report += f"- P/E Ratio: {latest_data['trailingPE']:.2f}\n"
-            stock_report += f"- Price to Book: {latest_data['priceToBook']:.2f}\n"
-            stock_report += f"- Debt to Equity: {latest_data['debtToEquity']:.2f}%\n"
-            
-            # Market Sentiment
-            stock_report += "\nMarket Sentiment:\n"
-            stock_report += f"- News Sentiment Score: {latest_data['news_sentiment']:.2f}\n"
-            stock_report += f"- Volatility Risk Score: {risk_score:.2f}/10\n"
-            
-            # Recent Performance
-            stock_report += "\nRecent Performance:\n"
-            stock_report += f"- 1-Day Return: {latest_data['Returns']*100:.2f}%\n"
-            stock_report += f"- 5-Day Return: {latest_data['Returns_5d']*100:.2f}%\n"
-            stock_report += f"- 20-Day Return: {latest_data['Returns_20d']*100:.2f}%\n"
+            # Create JSON structure for each stock
+            stock_report = {
+                'symbol': symbol,
+                'company_name': stock_data['CompanyName'].iloc[0] if 'CompanyName' in stock_data.columns else 'Unknown',
+                'overview': {
+                    'current_price': float(round(current_price, 2)),
+                    'predicted_price': float(round(predicted_price, 2)),
+                    'predicted_return_percent': float(round(predicted_return * 100, 2))
+                },
+                'technical_analysis': {
+                    'rsi': {
+                        'value': float(round(latest_data['RSI'], 2)),
+                        'signal': 'Oversold' if latest_data['RSI'] < 30 else 'Overbought' if latest_data['RSI'] > 70 else 'Neutral'
+                    },
+                    'macd': {
+                        'value': float(round(latest_data['MACD'], 2)),
+                        'signal': 'Bullish' if latest_data['MACD'] > 0 else 'Bearish'
+                    },
+                    'momentum_score': float(round(momentum_score, 2)),
+                    'trend_strength': float(round(trend_strength, 2))
+                },
+                'fundamental_analysis': {
+                    'market_cap_millions': float(round(latest_data['marketCap']/1e6, 2)),
+                    'pe_ratio': float(round(latest_data['trailingPE'], 2)),
+                    'price_to_book': float(round(latest_data['priceToBook'], 2)),
+                    'debt_to_equity': float(round(latest_data['debtToEquity'], 2))
+                },
+                'market_sentiment': {
+                    'news_sentiment_score': float(round(latest_data['news_sentiment'], 2)),
+                    'volatility_risk_score': float(round(risk_score, 2))
+                },
+                'recent_performance': {
+                    'return_1d': float(round(latest_data['Returns'] * 100, 2)),
+                    'return_5d': float(round(latest_data['Returns_5d'] * 100, 2)),
+                    'return_20d': float(round(latest_data['Returns_20d'] * 100, 2))
+                }
+            }
             
             report.append(stock_report)
         
-        return '\n'.join(report)
+        return report
     
     def _calculate_momentum_score(self, stock_data):
         """Calculate momentum score based on multiple indicators"""

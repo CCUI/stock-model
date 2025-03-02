@@ -49,13 +49,13 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         
         # Make predictions
         logger.info("Making predictions...")
-        predictions = predictor.predict_top_gainers(model, features_df, top_n=5)
+        predictions = predictor.predict_top_gainers(model, features_df, top_n=10)
         
         # Generate detailed analysis report
         logger.info("Generating analysis report...")
         report = predictor.generate_analysis_report(predictions, features_df)
         
-        print(f"\nTop 5 Predicted Gainers for Tomorrow ({market} Market):")
+        print(f"\nTop 10 Predicted Gainers for Tomorrow ({market} Market):")
         print("=====================================\n")
         print(report)
         
