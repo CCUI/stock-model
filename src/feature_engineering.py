@@ -12,6 +12,12 @@ class FeatureEngineer:
         """Generate technical and fundamental features for stock prediction"""
         features_df = stock_data.copy()
         
+        # Initialize sentiment features with default values
+        sentiment_features = ['news_sentiment', 'social_sentiment', 'sector_sentiment', 'market_sentiment']
+        for col in sentiment_features:
+            if col not in features_df.columns:
+                features_df[col] = 0.0
+        
         # Group by symbol to calculate features for each stock
         grouped = features_df.groupby('Symbol')
         
@@ -93,6 +99,20 @@ class FeatureEngineer:
             
             # OBV
             df['OBV'] = (df['Volume'] * (~df['Close'].diff().le(0) * 2 - 1)).cumsum()
+            
+            # Stochastic Oscillator
+            low_min = df['Low'].rolling(14).min()
+            high_max = df['High'].rolling(14).max()
+            df['Stochastic_K'] = ((df['Close'] - low_min) / (high_max - low_min)) * 100
+            df['Stochastic_D'] = df['Stochastic_K'].rolling(3).mean()
+            
+            # Williams %R
+            df['Williams_R'] = ((high_max - df['Close']) / (high_max - low_min)) * -100
+            
+            # Chaikin Money Flow (CMF)
+            mf_multiplier = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
+            mf_volume = mf_multiplier * df['Volume']
+            df['CMF'] = mf_volume.rolling(20).sum() / df['Volume'].rolling(20).sum()
             
             return df
             

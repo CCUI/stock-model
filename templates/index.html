@@ -164,67 +164,82 @@
                         
                         // Process and display each stock prediction
                         progressData.report.forEach(stock => {
-                    const card = document.createElement('div');
-                    card.className = 'col-lg-6 mb-4';
-                    card.innerHTML = `
-                        <div class="card stock-card">
-                            <div class="card-body">
-                                <h3 class="card-title">${stock.symbol} <span class="text-muted fs-5">- ${stock.name || 'N/A'}</span></h3>
-                                
-                                <!-- Overview Section -->
-                                <div class="metric-box">
-                                    <h5>Overview</h5>
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="metric-label">Current Price</div>
-                                            <div class="metric-value">$${stock.overview.current_price}</div>
+                            const card = document.createElement('div');
+                            card.className = 'col-lg-6 mb-4';
+                            card.innerHTML = `
+                                <div class="card stock-card">
+                                    <div class="card-body">
+                                        <h3 class="card-title">${stock.symbol} <span class="text-muted fs-5">- ${stock.company_name || 'N/A'}</span></h3>
+                                        
+                                        <!-- Overview Section -->
+                                        <div class="metric-box">
+                                            <h5>Overview</h5>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="metric-label">Current Price</div>
+                                                    <div class="metric-value">$${(stock.overview.current_price || 0).toFixed(2)}</div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="metric-label">Predicted Price</div>
+                                                    <div class="metric-value">$${(stock.overview.predicted_price || 0).toFixed(2)}</div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="metric-label">Predicted Return</div>
+                                                    <div class="metric-value">${((stock.overview.predicted_return_percent || 0)).toFixed(2)}%</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="metric-label">Predicted Price</div>
-                                            <div class="metric-value">$${stock.overview.predicted_price}</div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="metric-label">Predicted Return</div>
-                                            <div class="metric-value">${stock.overview.predicted_return_percent.toFixed(2)}%</div>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <!-- Technical Analysis Section -->
-                                <div class="analysis-section">
-                                    <h5>Technical Analysis</h5>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="metric-label">RSI (${stock.technical_analysis.rsi.signal})</div>
-                                            <div class="metric-value">${stock.technical_analysis.rsi.value}</div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="metric-label">MACD (${stock.technical_analysis.macd.signal})</div>
-                                            <div class="metric-value">${stock.technical_analysis.macd.value}</div>
-                                        </div>
+                                        <!-- Technical Analysis Section -->
+                                        <div class="analysis-section">
+                                            <h5>Technical Analysis</h5>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="metric-label">RSI (${stock.technical_analysis?.rsi?.signal || 'N/A'})</div>
+                                                    <div class="metric-value">${(stock.technical_analysis?.rsi?.value || 0).toFixed(2)}</div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="metric-label">MACD (${stock.technical_analysis?.macd?.signal || 'N/A'})</div>
+                                                    <div class="metric-value">${(stock.technical_analysis?.macd?.value || 0).toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                            <div class="row mt-3">
+                                                <div class="col-md-6">
+                                                    <div class="metric-label">Momentum Score</div>
+                                                    <div class="metric-value">${(stock.technical_analysis?.momentum_score || 0).toFixed(2)}</div>
+                                                    <div class="progress score-indicator">
+                                                        <div class="progress-bar" role="progressbar" 
+                                                             style="width: ${((stock.technical_analysis?.momentum_score || 0) * 10)}%"
+                                                             aria-valuenow="${stock.technical_analysis?.momentum_score || 0}"
+                                                             aria-valuemin="0" aria-valuemax="10">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="metric-label">Trend Strength</div>
+                                                    <div class="metric-value">${(stock.technical_analysis?.trend_strength || 0).toFixed(2)}</div>
+                                                    <div class="progress score-indicator">
+                                                        <div class="progress-bar" role="progressbar"
+                                                             style="width: ${((stock.technical_analysis?.trend_strength || 0) * 10)}%"
+                                                             aria-valuenow="${stock.technical_analysis?.trend_strength || 0}"
+                                                             aria-valuemin="0" aria-valuemax="10">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                     </div>
                                     <div class="row mt-3">
-                                        <div class="col-md-6">
-                                            <div class="metric-label">Momentum Score</div>
-                                            <div class="metric-value">${stock.technical_analysis.momentum_score.toFixed(2)}</div>
-                                            <div class="progress score-indicator">
-                                                <div class="progress-bar" role="progressbar" 
-                                                     style="width: ${stock.technical_analysis.momentum_score * 10}%"
-                                                     aria-valuenow="${stock.technical_analysis.momentum_score}"
-                                                     aria-valuemin="0" aria-valuemax="10">
-                                                </div>
-                                            </div>
+                                        <div class="col-md-4">
+                                            <div class="metric-label">Stochastic %K/%D</div>
+                                            <div class="metric-value">${stock.technical_analysis.stochastic_k.toFixed(2)}/${stock.technical_analysis.stochastic_d.toFixed(2)}</div>
                                         </div>
-                                        <div class="col-md-6">
-                                            <div class="metric-label">Trend Strength</div>
-                                            <div class="metric-value">${stock.technical_analysis.trend_strength.toFixed(2)}</div>
-                                            <div class="progress score-indicator">
-                                                <div class="progress-bar" role="progressbar"
-                                                     style="width: ${stock.technical_analysis.trend_strength * 10}%"
-                                                     aria-valuenow="${stock.technical_analysis.trend_strength}"
-                                                     aria-valuemin="0" aria-valuemax="10">
-                                                </div>
-                                            </div>
+                                        <div class="col-md-4">
+                                            <div class="metric-label">Williams %R</div>
+                                            <div class="metric-value">${stock.technical_analysis.williams_r.toFixed(2)}</div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="metric-label">CMF</div>
+                                            <div class="metric-value">${stock.technical_analysis.cmf.toFixed(2)}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -281,6 +296,41 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="row mt-3">
+                                        <div class="col-md-4">
+                                            <div class="metric-label">Social Sentiment</div>
+                                            <div class="metric-value">${(stock.market_sentiment?.social_sentiment_score || 0).toFixed(2)}</div>
+                                            <div class="progress score-indicator">
+                                                <div class="progress-bar" role="progressbar"
+                                                     style="width: ${((stock.market_sentiment?.social_sentiment_score || 0) + 1) * 50}%"
+                                                     aria-valuenow="${stock.market_sentiment?.social_sentiment_score || 0}"
+                                                     aria-valuemin="-1" aria-valuemax="1">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="metric-label">Sector Sentiment</div>
+                                            <div class="metric-value">${(stock.market_sentiment?.sector_sentiment_score || 0).toFixed(2)}</div>
+                                            <div class="progress score-indicator">
+                                                <div class="progress-bar" role="progressbar"
+                                                     style="width: ${((stock.market_sentiment?.sector_sentiment_score || 0) + 1) * 50}%"
+                                                     aria-valuenow="${stock.market_sentiment?.sector_sentiment_score || 0}"
+                                                     aria-valuemin="-1" aria-valuemax="1">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="metric-label">Market Sentiment</div>
+                                            <div class="metric-value">${(stock.market_sentiment?.market_sentiment_score || 0).toFixed(2)}</div>
+                                            <div class="progress score-indicator">
+                                                <div class="progress-bar" role="progressbar"
+                                                     style="width: ${((stock.market_sentiment?.market_sentiment_score || 0) + 1) * 50}%"
+                                                     aria-valuenow="${stock.market_sentiment?.market_sentiment_score || 0}"
+                                                     aria-valuemin="-1" aria-valuemax="1">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Recent Performance Section -->
@@ -289,20 +339,20 @@
                                     <div class="row">
                                         <div class="col-md-4">
                                             <div class="metric-label">1 Day Return</div>
-                                            <div class="metric-value ${stock.recent_performance.return_1d >= 0 ? 'sentiment-positive' : 'sentiment-negative'}">
-                                                ${stock.recent_performance.return_1d}%
+                                            <div class="metric-value ${(stock.recent_performance?.return_1d || 0) >= 0 ? 'sentiment-positive' : 'sentiment-negative'}">
+                                                ${(stock.recent_performance?.return_1d || 0).toFixed(2)}%
                                             </div>
                                         </div>
                                         <div class="col-md-4">
                                             <div class="metric-label">5 Day Return</div>
-                                            <div class="metric-value ${stock.recent_performance.return_5d >= 0 ? 'sentiment-positive' : 'sentiment-negative'}">
-                                                ${stock.recent_performance.return_5d}%
+                                            <div class="metric-value ${(stock.recent_performance?.return_5d || 0) >= 0 ? 'sentiment-positive' : 'sentiment-negative'}">
+                                                ${(stock.recent_performance?.return_5d || 0).toFixed(2)}%
                                             </div>
                                         </div>
                                         <div class="col-md-4">
                                             <div class="metric-label">20 Day Return</div>
-                                            <div class="metric-value ${stock.recent_performance.return_20d >= 0 ? 'sentiment-positive' : 'sentiment-negative'}">
-                                                ${stock.recent_performance.return_20d}%
+                                            <div class="metric-value ${(stock.recent_performance?.return_20d || 0) >= 0 ? 'sentiment-positive' : 'sentiment-negative'}">
+                                                ${(stock.recent_performance?.return_20d || 0).toFixed(2)}%
                                             </div>
                                         </div>
                                     </div>

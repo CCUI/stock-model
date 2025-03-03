@@ -4,38 +4,50 @@ from datetime import datetime
 
 class StockPredictor:
     def __init__(self):
-        # Define feature columns to ensure consistency across components
-        self.feature_cols = [
-            'RSI', 'MACD', 'MFI', 'ADX', 'ATR', 'OBV',
-            'Returns', 'Returns_5d', 'Returns_20d',
-            'Volatility_5d', 'Volatility_20d',
-            'Price_to_VWAP', 'marketCap', 'trailingPE',
-            'priceToBook', 'debtToEquity', 'news_sentiment'
-        ]
+        # Import feature columns from config to ensure consistency
+        from .config import FEATURE_COLUMNS
+        self.feature_cols = FEATURE_COLUMNS
     
     def predict_top_gainers(self, model, features_df, top_n=5):
         """Predict top gaining stocks for the next day"""
-        # Get the latest data for each stock
-        latest_data = features_df.groupby('Symbol').last()
-        
-        # Ensure all required features exist
-        for col in self.feature_cols:
-            if col not in latest_data.columns:
-                latest_data[col] = 0.0
-        
-        # Prepare features for prediction
-        X = latest_data[self.feature_cols]
-        
-        # Make predictions
-        predictions = model.predict(X)
-        
-        # Add predictions to the dataframe
-        latest_data['predicted_return'] = predictions
-        
-        # Sort by predicted return and get top N
-        top_gainers = latest_data.sort_values('predicted_return', ascending=False).head(top_n)
-        
-        return top_gainers
+        try:
+            # Get the latest data for each stock
+            latest_data = features_df.groupby('Symbol').last()
+            
+            # Create a list to store missing features
+            missing_features = []
+            
+            # Ensure all required features exist
+            for col in self.feature_cols:
+                if col not in latest_data.columns:
+                    missing_features.append(col)
+                    latest_data[col] = 0.0
+            
+            # Log warning if features are missing
+            if missing_features:
+                print(f"Warning: The following features are missing and were set to 0.0: {', '.join(missing_features)}")
+            
+            # Prepare features for prediction
+            X = latest_data[self.feature_cols]
+            
+            # Validate data before prediction
+            if X.isnull().any().any():
+                raise ValueError("Features contain null values after preprocessing")
+            
+            # Make predictions
+            predictions = model.predict(X)
+            
+            # Add predictions to the dataframe
+            latest_data['predicted_return'] = predictions
+            
+            # Sort by predicted return and get top N
+            top_gainers = latest_data.sort_values('predicted_return', ascending=False).head(top_n)
+            
+            return top_gainers
+        except Exception as e:
+            error_msg = f"Error in predict_top_gainers: {str(e)}\nFeatures available: {list(latest_data.columns)}"
+            print(error_msg)
+            raise Exception(f"Failed to analyze stocks: {str(e)}")
     
     def generate_analysis_report(self, predictions, features_df):
         """Generate detailed analysis report for predicted top gainers in JSON format"""
@@ -74,7 +86,11 @@ class StockPredictor:
                         'signal': 'Bullish' if latest_data['MACD'] > 0 else 'Bearish'
                     },
                     'momentum_score': float(round(momentum_score, 2)),
-                    'trend_strength': float(round(trend_strength, 2))
+                    'trend_strength': float(round(trend_strength, 2)),
+                    'stochastic_k': float(round(latest_data['Stochastic_K'], 2)),
+                    'stochastic_d': float(round(latest_data['Stochastic_D'], 2)),
+                    'williams_r': float(round(latest_data['Williams_R'], 2)),
+                    'cmf': float(round(latest_data['CMF'], 2))
                 },
                 'fundamental_analysis': {
                     'market_cap_millions': float(round(latest_data['marketCap']/1e6, 2)),
