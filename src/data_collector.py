@@ -317,7 +317,9 @@ class BaseStockDataCollector(ABC):
     def _get_news_sentiment(self, symbol):
         """Get news sentiment for a stock"""
         try:
-            if symbol in self.news_cache:
+            # Check if this symbol is in the current batch that needs updating
+            current_batch = self._get_next_sentiment_batch()
+            if symbol not in current_batch and symbol in self.news_cache:
                 return self.news_cache[symbol]
             
             # Get company name for better news search
