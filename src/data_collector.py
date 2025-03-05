@@ -37,6 +37,9 @@ class BaseStockDataCollector(ABC):
         # Batch processing settings
         self.processing_delay = self.yf_delay  # Use market-specific delay
         
+        # Initialize symbol to name mapping
+        self.symbol_to_name_map = {}
+        
         if include_news_sentiment:
             # Load FinBERT model only if needed
             self.sentiment_model = AutoModelForSequenceClassification.from_pretrained(
@@ -67,71 +70,30 @@ class BaseStockDataCollector(ABC):
         """Get list of stock symbols for the specific market"""
         pass
     
-    @abstractmethod
     def _get_company_name(self, symbol: str) -> str:
         """Get company name from symbol"""
+        try:
+            # Check if we already have the mapping
+            if symbol in self.symbol_to_name_map:
+                return self.symbol_to_name_map.get(symbol, symbol)
+            
+            # If not, load the mapping
+            self._load_symbol_to_name_mapping()
+            
+            return self.symbol_to_name_map.get(symbol, symbol)
+            
+        except Exception as e:
+            logger.error(f"Error getting company name for {symbol}: {str(e)}")
+            return symbol
+    
+    @abstractmethod
+    def _load_symbol_to_name_mapping(self):
+        """Load the mapping between symbols and company names"""
         pass
     
-    def _load_historical_cache(self):
-        """Load historical data cache from local file"""
-        cache_file = self.data_manager.historical_cache_file
-        if cache_file.exists():
-            try:
-                with open(cache_file, 'r') as f:
-                    cache_data = json.load(f)
-                    # Convert the loaded data back to DataFrame format
-                    self.historical_cache = {}
-                    for symbol, data in cache_data.items():
-                        try:
-                            df = pd.DataFrame(data['data'])
-                            df.index = pd.to_datetime(df.index)
-                            self.historical_cache[symbol] = {
-                                'data': df,
-                                'timestamp': data['timestamp']
-                            }
-                        except Exception as e:
-                            print(f"Error loading historical cache for {symbol}: {str(e)}")
-            except Exception as e:
-                print(f"Error loading historical cache: {str(e)}")
-                self.historical_cache = {}
-        else:
-            # Create the data directory if it doesn't exist
-            cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self.historical_cache = {}
-    
-    def _save_historical_cache(self):
-        """Save historical data cache to local file"""
-        cache_file = self.data_manager.historical_cache_file
-        try:
-            # Convert DataFrame values to serializable format
-            cache_data = {}
-            for symbol, data in self.historical_cache.items():
-                try:
-                    # Convert DataFrame to records and handle Timestamp objects
-                    df_records = data['data'].reset_index()
-                    # Convert all Timestamp and datetime64 columns to ISO format strings
-                    for col in df_records.columns:
-                        if pd.api.types.is_datetime64_any_dtype(df_records[col]):
-                            df_records[col] = df_records[col].dt.strftime('%Y-%m-%dT%H:%M:%S')
-                    
-                    # Convert any remaining Timestamp objects in the data
-                    records = df_records.to_dict('records')
-                    for record in records:
-                        for key, value in record.items():
-                            if isinstance(value, (pd.Timestamp, datetime)):
-                                record[key] = value.strftime('%Y-%m-%dT%H:%M:%S')
-                    
-                    cache_data[symbol] = {
-                        'data': records,
-                        'timestamp': data['timestamp']
-                    }
-                except Exception as e:
-                    print(f"Error saving historical cache for {symbol}: {str(e)}")
-            
-            with open(cache_file, 'w') as f:
-                json.dump(cache_data, f)
-        except Exception as e:
-            print(f"Error saving historical cache: {str(e)}")
+    # These methods are no longer needed as we're using DataManager directly
+    # The functionality is now handled by self.data_manager.load_historical_data() and
+    # self.data_manager.save_historical_data()
     
     def _get_fundamental_data(self, symbol):
         """Get fundamental data for a stock"""
@@ -234,46 +196,9 @@ class BaseStockDataCollector(ABC):
         
         return pd.concat(all_data) if all_data else pd.DataFrame()
     
-    def _load_sentiment_cache(self):
-        """Load sentiment cache from local file"""
-        cache_file = self.data_manager.sentiment_cache_file
-        if cache_file.exists():
-            try:
-                with open(cache_file, 'r') as f:
-                    cache_data = json.load(f)
-                    # Convert the loaded data back to DataFrame format
-                    self.news_cache = {k: pd.DataFrame({'sentiment_score': [v['sentiment_score']],
-                                                      'timestamp': [v['timestamp']]})
-                                      for k, v in cache_data.items()}
-            except Exception as e:
-                print(f"Error loading sentiment cache: {str(e)}")
-                self.news_cache = {}
-        else:
-            # Create the data directory if it doesn't exist
-            cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self.news_cache = {}
-    
-    def _save_sentiment_cache(self):
-        """Save sentiment cache to local file"""
-        cache_file = self.data_manager.sentiment_cache_file
-        try:
-            # Convert DataFrame values to serializable format
-            cache_data = {}
-            for k, v in self.news_cache.items():
-                # Ensure sentiment_score is a native Python float
-                sentiment_score = float(v['sentiment_score'].iloc[0]) if isinstance(v['sentiment_score'], pd.Series) else float(v['sentiment_score'])
-                # Get timestamp, defaulting to current time if not present
-                timestamp = v['timestamp'].iloc[0] if isinstance(v['timestamp'], pd.Series) else v.get('timestamp', datetime.now().isoformat())
-                
-                cache_data[k] = {
-                    'sentiment_score': sentiment_score,
-                    'timestamp': timestamp
-                }
-                
-            with open(cache_file, 'w') as f:
-                json.dump(cache_data, f)
-        except Exception as e:
-            print(f"Error saving sentiment cache: {str(e)}")
+    # These methods are no longer needed as we're using DataManager directly
+    # The functionality is now handled by self.data_manager.load_sentiment_data() and
+    # self.data_manager.save_sentiment_data()
     
     def _get_next_sentiment_batch(self) -> list:
         """Get the next batch of stocks that need sentiment updates"""
@@ -311,7 +236,7 @@ class BaseStockDataCollector(ABC):
             return [item['symbol'] for item in stock_updates[:self.daily_api_limit]]
             
         except Exception as e:
-            print(f"Error getting next sentiment batch: {str(e)}")
+            logger.error(f"Error getting next sentiment batch: {str(e)}")
             return []
     
     def _get_news_sentiment(self, symbol):
@@ -417,18 +342,9 @@ class UKStockDataCollector(BaseStockDataCollector):
             
         return unique_symbols
     
-    def _get_company_name(self, symbol: str) -> str:
-        """Get company name from symbol using Wikipedia data"""
+    def _load_symbol_to_name_mapping(self):
+        """Load the mapping between symbols and company names for UK stocks"""
         try:
-            # Remove .L suffix for lookup
-            clean_symbol = symbol.replace('.L', '')
-            
-            # First check if we already have the mapping
-            if hasattr(self, 'symbol_to_name_map'):
-                return self.symbol_to_name_map.get(clean_symbol, clean_symbol)
-            
-            # Create the mapping
-            self.symbol_to_name_map = {}
             response = requests.get("https://en.wikipedia.org/wiki/FTSE_100_Index")
             soup = BeautifulSoup(response.text, 'html.parser')
             tables = soup.find_all('table', {'class': 'wikitable'})
@@ -440,13 +356,12 @@ class UKStockDataCollector(BaseStockDataCollector):
                     if len(cols) >= 2:
                         company_name = cols[0].text.strip()
                         symbol_text = cols[1].text.strip()
+                        # Store without .L suffix
+                        self.symbol_to_name_map[symbol_text + '.L'] = company_name
                         self.symbol_to_name_map[symbol_text] = company_name
             
-            return self.symbol_to_name_map.get(clean_symbol, clean_symbol)
-            
         except Exception as e:
-            print(f"Error getting company name for {symbol}: {str(e)}")
-            return symbol
+            logger.error(f"Error loading UK symbol to name mapping: {str(e)}")
 
 class USStockDataCollector(BaseStockDataCollector):
     def _get_symbols(self):
@@ -489,15 +404,9 @@ class USStockDataCollector(BaseStockDataCollector):
             logger.error(f"Error fetching S&P 500 symbols: {str(e)}")
             return []
     
-    def _get_company_name(self, symbol: str) -> str:
-        """Get company name from symbol using Wikipedia data"""
+    def _load_symbol_to_name_mapping(self):
+        """Load the mapping between symbols and company names for US stocks"""
         try:
-            # First check if we already have the mapping
-            if hasattr(self, 'symbol_to_name_map'):
-                return self.symbol_to_name_map.get(symbol, symbol)
-            
-            # Create the mapping
-            self.symbol_to_name_map = {}
             response = requests.get("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
             soup = BeautifulSoup(response.text, 'html.parser')
             table = soup.find('table', {'class': 'wikitable'})
@@ -511,8 +420,5 @@ class USStockDataCollector(BaseStockDataCollector):
                         company_name = cols[1].text.strip()
                         self.symbol_to_name_map[symbol_text] = company_name
             
-            return self.symbol_to_name_map.get(symbol, symbol)
-            
         except Exception as e:
-            print(f"Error getting company name for {symbol}: {str(e)}")
-            return symbol
+            logger.error(f"Error loading US symbol to name mapping: {str(e)}")
