@@ -15,6 +15,7 @@ import json
 from .data_manager import DataManager
 import logging
 from .utils import setup_logging
+from .enhanced_rate_limiter import EnhancedAPIRateLimiter
 
 logger = setup_logging()
 
@@ -23,8 +24,10 @@ class BaseStockDataCollector(ABC):
         self.market = market.upper()
         logger.info(f"Initializing {self.market} stock data collector")
         
-        # Add delay settings for US market
-        self.yf_delay = 2.0 if market.upper() == 'US' else 0.5  # Longer delay for US market
+        # Initialize enhanced rate limiter
+        self.rate_limiter = EnhancedAPIRateLimiter()
+        
+        # Configure market-specific settings
         self.batch_size = 10 if market.upper() == 'US' else 25  # Smaller batch for US market
         
         self.include_news_sentiment = include_news_sentiment
@@ -33,9 +36,6 @@ class BaseStockDataCollector(ABC):
         
         # Initialize historical cache from market-specific directory
         self.historical_cache = self.data_manager.load_historical_data()
-        
-        # Batch processing settings
-        self.processing_delay = self.yf_delay  # Use market-specific delay
         
         # Initialize symbol to name mapping
         self.symbol_to_name_map = {}
@@ -58,12 +58,8 @@ class BaseStockDataCollector(ABC):
                 
             # Initialize cache for news data
             self.news_cache = self.data_manager.load_sentiment_data()
-            self.last_api_call = 0
-            self.api_call_delay = 2  # Increased delay between API calls
-            self.max_retries = 3  # Maximum number of retries for API calls
-            self.backoff_factor = 2  # Exponential backoff factor
             self.daily_api_limit = 100  # NewsAPI free tier limit
-            self.last_sentiment_update_file = self.data_manager.market_dir / 'last_sentiment_update.json'  # Number of companies to batch in one API call
+            self.last_sentiment_update_file = self.data_manager.market_dir / 'last_sentiment_update.json'
     
     @abstractmethod
     def _get_symbols(self):
@@ -128,71 +124,72 @@ class BaseStockDataCollector(ABC):
             }
 
     def collect_historical_data(self, end_date, lookback_days=365):
-        """Collect historical data in batches"""
+        """Collect historical data in batches with proper rate limiting and parallel processing"""
         start_date = end_date - timedelta(days=lookback_days)
         all_data = []
         
-        # Process symbols in batches
-        for i in tqdm(range(0, len(self.symbols), self.batch_size), desc="Collecting data"):
-            batch_symbols = self.symbols[i:i + self.batch_size]
-            batch_data = []
+        # First, identify which symbols need to be fetched (not in cache)
+        symbols_to_fetch = []
+        cached_data_map = {}
+        
+        for symbol in self.symbols:
+            cached_data = self.historical_cache.get(symbol, {}).get('data', None)
+            if cached_data is not None:
+                cached_data_map[symbol] = cached_data
+            else:
+                symbols_to_fetch.append(symbol)
+        
+        logger.info(f"Found {len(cached_data_map)} cached symbols, need to fetch {len(symbols_to_fetch)}")
+        
+        # Process symbols in optimized batches
+        for i in tqdm(range(0, len(symbols_to_fetch), self.batch_size), desc="Collecting data"):
+            batch_symbols = symbols_to_fetch[i:i + self.batch_size]
+            batch_data = {}
             
+            # Step 1: Fetch historical price data for all symbols in batch
             for symbol in batch_symbols:
                 try:
-                    # Check cache first
-                    cached_data = self.historical_cache.get(symbol, {}).get('data', None)
-                    if cached_data is not None:
-                        batch_data.append(cached_data)
-                        continue
+                    # Use rate limiter to fetch data with proper throttling
+                    def fetch_history():
+                        stock = yf.Ticker(symbol)
+                        return stock.history(start=start_date, end=end_date)
                     
-                    # Add delay to avoid rate limits
-                    time.sleep(self.yf_delay)
+                    hist_data = self.rate_limiter.execute_yf_request(fetch_history)
                     
-                    # Fetch new data with retry mechanism
-                    max_retries = 3
-                    for attempt in range(max_retries):
-                        try:
-                            stock = yf.Ticker(symbol)
-                            hist_data = stock.history(start=start_date, end=end_date)
-                            
-                            if not hist_data.empty:
-                                # Add fundamental data
-                                fundamentals = self._get_fundamental_data(symbol)
-                                for key, value in fundamentals.items():
-                                    hist_data[key] = value
-                                
-                                # Add symbol column
-                                hist_data['Symbol'] = symbol
-                                
-                                # Add news sentiment if enabled
-                                if self.include_news_sentiment:
-                                    sentiment_data = self._get_news_sentiment(symbol)
-                                    hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
-                                
-                                batch_data.append(hist_data)
-                                break
-                                
-                        except Exception as e:
-                            if "Rate limit" in str(e) and attempt < max_retries - 1:
-                                wait_time = (attempt + 1) * self.yf_delay
-                                logger.warning(f"Rate limit hit for {symbol}, waiting {wait_time}s...")
-                                time.sleep(wait_time)
-                                continue
-                            else:
-                                raise
-                                
+                    if not hist_data.empty:
+                        # Add symbol column
+                        hist_data['Symbol'] = symbol
+                        batch_data[symbol] = hist_data
                 except Exception as e:
-                    logger.error(f"Error collecting data for {symbol}: {str(e)}")
+                    logger.error(f"Error collecting price data for {symbol}: {str(e)}")
+            
+            # Step 2: Fetch fundamental data for all symbols with price data
+            for symbol, hist_data in batch_data.items():
+                try:
+                    # Use rate limiter for fundamental data requests
+                    fundamentals = self._get_fundamental_data(symbol)
+                    for key, value in fundamentals.items():
+                        hist_data[key] = value
+                except Exception as e:
+                    logger.error(f"Error collecting fundamental data for {symbol}: {str(e)}")
+            
+            # Step 3: Add sentiment data if enabled (in a separate batch to avoid mixing API calls)
+            if self.include_news_sentiment:
+                for symbol, hist_data in batch_data.items():
+                    try:
+                        sentiment_data = self._get_news_sentiment(symbol)
+                        hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
+                    except Exception as e:
+                        logger.error(f"Error collecting sentiment data for {symbol}: {str(e)}")
+                        hist_data['news_sentiment'] = 0
             
             # Save batch data
             if batch_data:
-                self.data_manager.save_historical_data(
-                    {sym: df for sym, df in zip(batch_symbols, batch_data)}
-                )
-                all_data.extend(batch_data)
-            
-            # Delay between batches
-            time.sleep(self.processing_delay)
+                self.data_manager.save_historical_data(batch_data)
+                all_data.extend(batch_data.values())
+        
+        # Combine with cached data
+        all_data.extend(cached_data_map.values())
         
         return pd.concat(all_data) if all_data else pd.DataFrame()
     
@@ -250,23 +247,20 @@ class BaseStockDataCollector(ABC):
             # Get company name for better news search
             company_name = self._get_company_name(symbol)
             
-            # Ensure we respect rate limits
-            current_time = time.time()
-            if current_time - self.last_api_call < self.api_call_delay:
-                time.sleep(self.api_call_delay - (current_time - self.last_api_call))
+            # Define the news API request function for rate limiting
+            def fetch_news_articles():
+                url = f"https://newsapi.org/v2/everything"
+                params = {
+                    'q': f'"{company_name}" OR "{symbol}"',
+                    'language': 'en',
+                    'sortBy': 'relevancy',
+                    'pageSize': 10,
+                    'apiKey': self.news_api_key
+                }
+                return requests.get(url, params=params)
             
-            # Search for news articles
-            url = f"https://newsapi.org/v2/everything"
-            params = {
-                'q': f'"{company_name}" OR "{symbol}"',
-                'language': 'en',
-                'sortBy': 'relevancy',
-                'pageSize': 10,
-                'apiKey': self.news_api_key
-            }
-            
-            response = requests.get(url, params=params)
-            self.last_api_call = time.time()
+            # Use rate limiter to make the request
+            response = self.rate_limiter.execute_news_request(fetch_news_articles)
             
             if response.status_code == 200:
                 articles = response.json().get('articles', [])

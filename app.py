@@ -3,8 +3,13 @@ from datetime import datetime
 from main import main
 import threading
 import queue
+import logging
 
 app = Flask(__name__)
+
+# Configure Flask logger to only show warnings and errors
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.WARNING)
 
 # Global queue for progress updates
 progress_queue = queue.Queue()
