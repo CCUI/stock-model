@@ -19,6 +19,25 @@ def get_uk_trading_day(date):
     # TODO: Add UK holiday calendar check if needed
     return date
 
+def get_us_trading_day(date):
+    """Get the last US trading day from a given date"""
+    # Adjust for weekends
+    while date.weekday() > 4:  # 5 is Saturday, 6 is Sunday
+        date = date - timedelta(days=1)
+    
+    # TODO: Add US holiday calendar check if needed
+    return date
+
+def get_trading_day(market, date):
+    """Get the last trading day for the specified market"""
+    if market.upper() == 'UK':
+        return get_uk_trading_day(date)
+    elif market.upper() == 'US':
+        return get_us_trading_day(date)
+    else:
+        # Default to UK trading day if market not recognized
+        return get_uk_trading_day(date)
+
 def cleanup_old_data(market_dir: Path, max_age_days: int = 30):
     """Clean up old data files"""
     current_time = datetime.now()

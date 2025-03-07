@@ -62,30 +62,30 @@ class BaseStockDataCollector(ABC):
             self.last_sentiment_update_file = self.data_manager.market_dir / 'last_sentiment_update.json'
     
     @abstractmethod
+    @abstractmethod
+    def _fetch_market_data(self):
+        """Fetch both symbols and company names from market-specific source"""
+        pass
+
     def _get_symbols(self):
         """Get list of stock symbols for the specific market"""
-        pass
+        try:
+            if not self.symbol_to_name_map:
+                self._fetch_market_data()
+            return list(self.symbol_to_name_map.keys())
+        except Exception as e:
+            logger.error(f"Error getting symbols: {str(e)}")
+            return []
     
     def _get_company_name(self, symbol: str) -> str:
         """Get company name from symbol"""
         try:
-            # Check if we already have the mapping
-            if symbol in self.symbol_to_name_map:
-                return self.symbol_to_name_map.get(symbol, symbol)
-            
-            # If not, load the mapping
-            self._load_symbol_to_name_mapping()
-            
+            if not self.symbol_to_name_map:
+                self._fetch_market_data()
             return self.symbol_to_name_map.get(symbol, symbol)
-            
         except Exception as e:
             logger.error(f"Error getting company name for {symbol}: {str(e)}")
             return symbol
-    
-    @abstractmethod
-    def _load_symbol_to_name_mapping(self):
-        """Load the mapping between symbols and company names"""
-        pass
     
     # These methods are no longer needed as we're using DataManager directly
     # The functionality is now handled by self.data_manager.load_historical_data() and
@@ -301,45 +301,11 @@ class BaseStockDataCollector(ABC):
             return {'sentiment': 0, 'timestamp': datetime.now().isoformat()}
 
 class UKStockDataCollector(BaseStockDataCollector):
-    def _get_symbols(self):
-        """Get list of FTSE stocks"""
-        # Only FTSE 100 components for testing
-        ftse_url = "https://en.wikipedia.org/wiki/FTSE_100_Index"
-        
-        symbols = []
-        response = requests.get(ftse_url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        tables = soup.find_all('table', {'class': 'wikitable'})
-        
-        for table in tables:
-            rows = table.find_all('tr')[1:]
-            for row in rows:
-                cols = row.find_all('td')
-                if len(cols) >= 2:
-                    # Get the symbol text and clean it
-                    symbol_text = cols[1].text.strip()
-                    
-                    # Skip if the symbol contains numeric values (likely a price)
-                    if any(char.isdigit() for char in symbol_text):
-                        continue
-                        
-                    # Add .L suffix for London Stock Exchange
-                    symbol = symbol_text + '.L'
-                    symbols.append(symbol)
-        
-        # Remove duplicates
-        unique_symbols = list(set(symbols))
-        
-        # Ensure we have symbols
-        if not unique_symbols:
-            raise ValueError("No valid FTSE symbols could be extracted from the webpage")
-            
-        return unique_symbols
-    
-    def _load_symbol_to_name_mapping(self):
-        """Load the mapping between symbols and company names for UK stocks"""
+    def _fetch_market_data(self):
+        """Fetch both symbols and company names for FTSE stocks"""
         try:
-            response = requests.get("https://en.wikipedia.org/wiki/FTSE_100_Index")
+            ftse_url = "https://en.wikipedia.org/wiki/FTSE_100_Index"
+            response = requests.get(ftse_url)
             soup = BeautifulSoup(response.text, 'html.parser')
             tables = soup.find_all('table', {'class': 'wikitable'})
             
@@ -350,58 +316,29 @@ class UKStockDataCollector(BaseStockDataCollector):
                     if len(cols) >= 2:
                         company_name = cols[0].text.strip()
                         symbol_text = cols[1].text.strip()
-                        # Store without .L suffix
-                        self.symbol_to_name_map[symbol_text + '.L'] = company_name
+                        
+                        # Skip if the symbol contains numeric values (likely a price)
+                        if any(char.isdigit() for char in symbol_text):
+                            continue
+                        
+                        # Store both with and without .L suffix
+                        symbol_with_suffix = symbol_text + '.L'
+                        self.symbol_to_name_map[symbol_with_suffix] = company_name
                         self.symbol_to_name_map[symbol_text] = company_name
             
+            # Ensure we have symbols
+            if not self.symbol_to_name_map:
+                raise ValueError("No valid FTSE symbols could be extracted from the webpage")
+                
         except Exception as e:
-            logger.error(f"Error loading UK symbol to name mapping: {str(e)}")
+            logger.error(f"Error fetching UK market data: {str(e)}")
 
 class USStockDataCollector(BaseStockDataCollector):
-    def _get_symbols(self):
-        """Get list of S&P 500 stocks"""
-        sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        
-        symbols = []
+    def _fetch_market_data(self):
+        """Fetch both symbols and company names for S&P 500 stocks"""
         try:
+            sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
             response = requests.get(sp500_url)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            table = soup.find('table', {'class': 'wikitable'})
-            
-            if table:
-                rows = table.find_all('tr')[1:]
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) >= 1:
-                        symbol = cols[0].text.strip()
-                        # Skip problematic symbols and clean others
-                        if symbol and not any(char.isdigit() for char in symbol):
-                            # Remove .B suffix and other problematic characters
-                            symbol = symbol.split('.')[0]
-                            if symbol:
-                                symbols.append(symbol)
-            
-            # Remove duplicates and problematic symbols
-            unique_symbols = list(set(symbols))
-            filtered_symbols = [
-                sym for sym in unique_symbols 
-                if not any(x in sym for x in ['-', '.', '$'])
-            ]
-            
-            if not filtered_symbols:
-                raise ValueError("No valid S&P 500 symbols could be extracted")
-            
-            logger.info(f"Found {len(filtered_symbols)} valid US stock symbols")
-            return filtered_symbols
-            
-        except Exception as e:
-            logger.error(f"Error fetching S&P 500 symbols: {str(e)}")
-            return []
-    
-    def _load_symbol_to_name_mapping(self):
-        """Load the mapping between symbols and company names for US stocks"""
-        try:
-            response = requests.get("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
             soup = BeautifulSoup(response.text, 'html.parser')
             table = soup.find('table', {'class': 'wikitable'})
             
@@ -412,7 +349,19 @@ class USStockDataCollector(BaseStockDataCollector):
                     if len(cols) >= 2:
                         symbol_text = cols[0].text.strip()
                         company_name = cols[1].text.strip()
-                        self.symbol_to_name_map[symbol_text] = company_name
+                        
+                        # Skip problematic symbols and clean others
+                        if symbol_text and not any(char.isdigit() for char in symbol_text):
+                            # Remove .B suffix and other problematic characters
+                            clean_symbol = symbol_text.split('.')[0]
+                            if clean_symbol and not any(x in clean_symbol for x in ['-', '.', '$']):
+                                self.symbol_to_name_map[clean_symbol] = company_name
+            
+            # Ensure we have symbols
+            if not self.symbol_to_name_map:
+                raise ValueError("No valid S&P 500 symbols could be extracted")
+                
+            logger.info(f"Found {len(self.symbol_to_name_map)} valid US stock symbols")
             
         except Exception as e:
-            logger.error(f"Error loading US symbol to name mapping: {str(e)}")
+            logger.error(f"Error fetching US market data: {str(e)}")

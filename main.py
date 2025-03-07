@@ -5,7 +5,7 @@ from src.data_collector import UKStockDataCollector, USStockDataCollector
 from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.predictor import StockPredictor
-from src.utils import setup_logging, get_uk_trading_day
+from src.utils import setup_logging, get_trading_day
 from src.load_env import load_environment_variables
 import argparse
 
@@ -16,9 +16,9 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
     # Setup logging
     logger = setup_logging()
     
-    # If no date provided, use the last trading day
+    # If no date provided, use the last trading day based on the selected market
     if analysis_date is None:
-        analysis_date = get_uk_trading_day(datetime.now() - timedelta(days=1))
+        analysis_date = get_trading_day(market, datetime.now() - timedelta(days=1))
     
     logger.info(f"Starting analysis for {market} market on date: {analysis_date}")
     
@@ -56,7 +56,7 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         report = predictor.generate_analysis_report(predictions, features_df)
         
         print(f"\nTop 10 Predicted Gainers for Tomorrow ({market} Market):")
-        print("=====================================\n")
+        print("=====================================")
         print(report)
         
         return predictions, report
