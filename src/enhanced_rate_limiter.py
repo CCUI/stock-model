@@ -5,13 +5,14 @@ import requests
 import json
 from pathlib import Path
 from typing import Callable, Any, Dict, Optional, Union
+from .utils import setup_logging
 
 # Rate limiting libraries
 from pyrate_limiter import Duration, RequestRate, Limiter
 from requests_ratelimiter import LimiterSession
 import requests_cache
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 from queue import Queue, Empty
 from threading import Thread, Event

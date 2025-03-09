@@ -6,9 +6,6 @@
     <title>Stock Market Analysis</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .progress {
-            height: 25px;
-        }
         .stock-card {
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -89,20 +86,9 @@
             </div>
         </div>
         
-        <!-- Progress Section -->
-        <div id="progressSection" class="card mb-4 d-none">
-            <div class="card-body">
-                <h5 class="card-title">Analysis Progress</h5>
-                <div class="progress mb-3">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" 
-                         style="width: 0%" 
-                         id="progressBar">
-                        0%
-                    </div>
-                </div>
-                <p id="progressStatus" class="mb-0">Initializing...</p>
-            </div>
+        <!-- Analysis in progress indicator -->
+        <div id="loadingIndicator" class="d-none text-center mb-4">
+            <p class="mb-0">Analysis in progress, please wait...</p>
         </div>
         
         <!-- Results Section -->
@@ -134,7 +120,7 @@
             formData.set('include_news', document.getElementById('includeNews').checked);
 
             submitBtn.disabled = true;
-            progressSection.classList.remove('d-none');
+            loadingIndicator.classList.remove('d-none');
             resultsSection.classList.add('d-none');
             stockCards.innerHTML = '';
 
@@ -150,13 +136,6 @@
                 while (true) {
                     const progressResponse = await fetch('/progress');
                     const progressData = await progressResponse.json();
-                    
-                    // Update progress bar
-                    const progressBar = document.getElementById('progressBar');
-                    const progressStatus = document.getElementById('progressStatus');
-                    progressBar.style.width = `${progressData.percentage}%`;
-                    progressBar.textContent = `${progressData.percentage}%`;
-                    progressStatus.textContent = progressData.step;
                     
                     if (progressData.status === 'complete' && progressData.report) {
                         // Show results section
@@ -371,7 +350,7 @@
                 alert('An error occurred while analyzing stocks.');
             } finally {
                 submitBtn.disabled = false;
-                progressSection.classList.add('d-none');
+                loadingIndicator.classList.add('d-none');
             }
         });
     </script>

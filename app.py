@@ -11,23 +11,21 @@ app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.WARNING)
 
-# Global queue for progress updates
+# Global queue for status updates
 progress_queue = queue.Queue()
 
-# Global variable to store the latest progress
+# Global variable to store the latest status
 current_progress = {
     'step': '',
-    'percentage': 0,
     'status': 'idle'
 }
 
 def run_analysis(market, include_news_sentiment, analysis_date):
-    """Run the analysis in a separate thread and update progress"""
+    """Run the analysis in a separate thread and update status"""
     try:
-        # Update progress for initialization
+        # Update status for initialization
         progress_queue.put({
             'step': 'Initializing analysis...',
-            'percentage': 10,
             'status': 'running'
         })
 
@@ -38,10 +36,9 @@ def run_analysis(market, include_news_sentiment, analysis_date):
             include_news_sentiment=include_news_sentiment
         )
 
-        # Update progress for completion
+        # Update status for completion
         progress_queue.put({
             'step': 'Analysis complete',
-            'percentage': 100,
             'status': 'complete',
             'report': report
         })
@@ -50,7 +47,6 @@ def run_analysis(market, include_news_sentiment, analysis_date):
         # Handle errors
         progress_queue.put({
             'step': f'Error: {str(e)}',
-            'percentage': 0,
             'status': 'error'
         })
 
@@ -73,11 +69,10 @@ def analyze():
         except ValueError:
             return jsonify({'error': 'Invalid date format'}), 400
 
-    # Reset progress
+    # Reset status
     global current_progress
     current_progress = {
         'step': 'Starting analysis...',
-        'percentage': 0,
         'status': 'running'
     }
 
@@ -93,9 +88,9 @@ def analyze():
 
 @app.route('/progress')
 def get_progress():
-    """Get the current progress of the analysis"""
+    """Get the current status of the analysis"""
     try:
-        # Check for new progress updates
+        # Check for new status updates
         while not progress_queue.empty():
             global current_progress
             current_progress = progress_queue.get_nowait()

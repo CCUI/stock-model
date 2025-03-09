@@ -18,7 +18,7 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
     
     # If no date provided, use the last trading day based on the selected market
     if analysis_date is None:
-        analysis_date = get_trading_day(market, datetime.now() - timedelta(days=1))
+        analysis_date = get_trading_day(market, datetime.now())
     
     logger.info(f"Starting analysis for {market} market on date: {analysis_date}")
     
@@ -49,7 +49,7 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         
         # Make predictions
         logger.info("Making predictions...")
-        predictions = predictor.predict_top_gainers(model, features_df, top_n=10)
+        predictions = predictor.predict_top_gainers(model, features_df, top_n=10, market=market)
         
         # Generate detailed analysis report
         logger.info("Generating analysis report...")

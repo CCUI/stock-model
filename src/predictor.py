@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import numpy as np
+import pandas as pd
+from datetime import datetime
 
 class StockPredictor:
     def __init__(self):
@@ -8,11 +11,22 @@ class StockPredictor:
         from .config import FEATURE_COLUMNS
         self.feature_cols = FEATURE_COLUMNS
     
-    def predict_top_gainers(self, model, features_df, top_n=5):
+    def predict_top_gainers(self, model, features_df, top_n=5, market='UK'):
         """Predict top gaining stocks for the next day"""
         try:
+            # Filter stocks by market based on symbol pattern
+            if market.upper() == 'UK':
+                # UK stocks typically have .L suffix
+                market_stocks = features_df[features_df['Symbol'].str.endswith('.L')]
+            elif market.upper() == 'US':
+                # US stocks don't have .L suffix
+                market_stocks = features_df[~features_df['Symbol'].str.endswith('.L')]
+            else:
+                # If market not specified, use all stocks
+                market_stocks = features_df
+                
             # Get the latest data for each stock
-            latest_data = features_df.groupby('Symbol').last()
+            latest_data = market_stocks.groupby('Symbol').last()
             
             # Create a list to store missing features
             missing_features = []
@@ -26,6 +40,14 @@ class StockPredictor:
             # Log warning if features are missing
             if missing_features:
                 print(f"Warning: The following features are missing and were set to 0.0: {', '.join(missing_features)}")
+            
+            # Handle additional features in the data that aren't in the model
+            # This fixes the feature_names mismatch error
+            extra_features = [col for col in latest_data.columns if col not in self.feature_cols and col in ['social_sentiment', 'sector_sentiment', 'market_sentiment']]
+            if extra_features:
+                for col in extra_features:
+                    if col in latest_data.columns:
+                        latest_data = latest_data.drop(columns=[col])
             
             # Prepare features for prediction
             X = latest_data[self.feature_cols]
@@ -45,7 +67,7 @@ class StockPredictor:
             
             return top_gainers
         except Exception as e:
-            error_msg = f"Error in predict_top_gainers: {str(e)}\nFeatures available: {list(latest_data.columns)}"
+            error_msg = f"Error in predict_top_gainers: {str(e)}"
             print(error_msg)
             raise Exception(f"Failed to analyze stocks: {str(e)}")
     
@@ -151,8 +173,13 @@ class StockPredictor:
             if 'OBV' in latest:
                 volume_score = 10 if latest['OBV'] > 0 else -10
             
+            # Moving average trend
+            ma_score = 0
+            if all(col in latest.index for col in ['SMA_20', 'SMA_50']):
+                ma_score = 10 if latest['SMA_20'] > latest['SMA_50'] else -10
+            
             # Combine scores
-            trend_score = (price_score + rsi_score + macd_score + volume_score) / 4
+            trend_score = (price_score + rsi_score + macd_score + volume_score + ma_score) / 5
             
             # Scale to 0-10 range
             return max(0, min(10, trend_score + 5))
@@ -183,3 +210,38 @@ class StockPredictor:
         except Exception as e:
             print(f"Error calculating risk score: {str(e)}")
             return 5.0  # Return neutral score on error
+    
+    def explain_prediction(self, model, features_df, symbol):
+        """Explain prediction for a specific stock"""
+        # Get features for the symbol
+        symbol_features = features_df[features_df['Symbol'] == symbol].iloc[-1]
+        
+        # Get feature values
+        X = symbol_features[self.feature_cols].values.reshape(1, -1)
+        
+        # Make prediction
+        prediction = model.predict(X)[0]
+        
+        # Calculate SHAP values
+        explainer = shap.Explainer(model)
+        shap_values = explainer(X)
+        
+        # Get feature importance
+        feature_importance = pd.DataFrame({
+            'feature': self.feature_cols,
+            'importance': np.abs(shap_values.values[0]),
+            'effect': shap_values.values[0]
+        }).sort_values('importance', ascending=False)
+        
+        # Determine top factors
+        positive_factors = feature_importance[feature_importance['effect'] > 0].head(3)
+        negative_factors = feature_importance[feature_importance['effect'] < 0].head(3)
+        
+        explanation = {
+            'symbol': symbol,
+            'prediction': prediction,
+            'positive_factors': positive_factors.to_dict('records'),
+            'negative_factors': negative_factors.to_dict('records')
+        }
+        
+        return explanation

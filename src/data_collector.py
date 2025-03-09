@@ -3,8 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
+from textblob import TextBlob
 import os
 from dotenv import load_dotenv
 from pathlib import Path
@@ -16,6 +15,7 @@ from .data_manager import DataManager
 import logging
 from .utils import setup_logging
 from .enhanced_rate_limiter import EnhancedAPIRateLimiter
+from concurrent.futures import ThreadPoolExecutor
 
 logger = setup_logging()
 
@@ -29,6 +29,14 @@ class BaseStockDataCollector(ABC):
         
         # Configure market-specific settings
         self.batch_size = 10 if market.upper() == 'US' else 25  # Smaller batch for US market
+        self.yf_delay = 2.0 if market.upper() == 'US' else 0.5
+        self.processing_delay = self.yf_delay
+        
+        # Initialize symbol to name mapping
+        self.symbol_to_name_map = {}
+        
+        # Fetch market data to initialize symbol_to_name_map
+        self._fetch_market_data()
         
         self.include_news_sentiment = include_news_sentiment
         self.symbols = self._get_symbols()
@@ -37,19 +45,17 @@ class BaseStockDataCollector(ABC):
         # Initialize historical cache from market-specific directory
         self.historical_cache = self.data_manager.load_historical_data()
         
-        # Initialize symbol to name mapping
-        self.symbol_to_name_map = {}
-        
         if include_news_sentiment:
-            # Load FinBERT model only if needed
-            self.sentiment_model = AutoModelForSequenceClassification.from_pretrained(
-                'ProsusAI/finbert',
-                torch_dtype=torch.float32  # Use float32 instead of float16 for better compatibility
-            )
-            self.tokenizer = AutoTokenizer.from_pretrained('ProsusAI/finbert')
+            # Load news API key
+            self.news_api_key = os.getenv('NEWS_API_KEY')
+            if not self.news_api_key:
+                logger.warning("NEWS_API_KEY not found in environment variables")
+                self.include_news_sentiment = False
             
             # Initialize news cache
             self.news_cache = self.data_manager.load_sentiment_data()
+            self.last_api_call = 0
+            self.api_call_delay = 1.0  # Delay between API calls in seconds
             
             # Get NewsAPI key from environment variable
             self.news_api_key = os.getenv('NEWS_API_KEY')
@@ -62,7 +68,6 @@ class BaseStockDataCollector(ABC):
             self.last_sentiment_update_file = self.data_manager.market_dir / 'last_sentiment_update.json'
     
     @abstractmethod
-    @abstractmethod
     def _fetch_market_data(self):
         """Fetch both symbols and company names from market-specific source"""
         pass
@@ -70,8 +75,6 @@ class BaseStockDataCollector(ABC):
     def _get_symbols(self):
         """Get list of stock symbols for the specific market"""
         try:
-            if not self.symbol_to_name_map:
-                self._fetch_market_data()
             return list(self.symbol_to_name_map.keys())
         except Exception as e:
             logger.error(f"Error getting symbols: {str(e)}")
@@ -80,8 +83,6 @@ class BaseStockDataCollector(ABC):
     def _get_company_name(self, symbol: str) -> str:
         """Get company name from symbol"""
         try:
-            if not self.symbol_to_name_map:
-                self._fetch_market_data()
             return self.symbol_to_name_map.get(symbol, symbol)
         except Exception as e:
             logger.error(f"Error getting company name for {symbol}: {str(e)}")
@@ -124,74 +125,76 @@ class BaseStockDataCollector(ABC):
             }
 
     def collect_historical_data(self, end_date, lookback_days=365):
-        """Collect historical data in batches with proper rate limiting and parallel processing"""
+        """Collect historical data using parallel processing"""
         start_date = end_date - timedelta(days=lookback_days)
-        all_data = []
         
-        # First, identify which symbols need to be fetched (not in cache)
-        symbols_to_fetch = []
-        cached_data_map = {}
+        # Load cache
+        self.historical_cache = self.data_manager.load_historical_data()
         
-        for symbol in self.symbols:
-            cached_data = self.historical_cache.get(symbol, {}).get('data', None)
-            if cached_data is not None:
-                cached_data_map[symbol] = cached_data
-            else:
-                symbols_to_fetch.append(symbol)
+        # Create batches of symbols
+        symbol_batches = [
+            self.symbols[i:i+self.batch_size] 
+            for i in range(0, len(self.symbols), self.batch_size)
+        ]
         
-        logger.info(f"Found {len(cached_data_map)} cached symbols, need to fetch {len(symbols_to_fetch)}")
-        
-        # Process symbols in optimized batches
-        for i in tqdm(range(0, len(symbols_to_fetch), self.batch_size), desc="Collecting data"):
-            batch_symbols = symbols_to_fetch[i:i + self.batch_size]
+        # Function to process a batch
+        def process_batch(batch_symbols):
             batch_data = {}
-            
-            # Step 1: Fetch historical price data for all symbols in batch
             for symbol in batch_symbols:
                 try:
-                    # Use rate limiter to fetch data with proper throttling
-                    def fetch_history():
-                        stock = yf.Ticker(symbol)
-                        return stock.history(start=start_date, end=end_date)
+                    # Check cache first
+                    cached_data = self.historical_cache.get(symbol, {}).get('data', None)
+                    if cached_data is not None:
+                        batch_data[symbol] = cached_data
+                        continue
                     
-                    hist_data = self.rate_limiter.execute_yf_request(fetch_history)
+                    # Fetch new data
+                    stock = yf.Ticker(symbol)
+                    hist_data = stock.history(start=start_date, end=end_date)
                     
                     if not hist_data.empty:
+                        # Add fundamental data
+                        fundamentals = self._get_fundamental_data(symbol)
+                        for key, value in fundamentals.items():
+                            hist_data[key] = value
+                        
                         # Add symbol column
                         hist_data['Symbol'] = symbol
+                        
+                        # Add company name column
+                        company_name = self._get_company_name(symbol)
+                        hist_data['CompanyName'] = company_name
+                        
+                        # Add news sentiment if enabled
+                        if self.include_news_sentiment:
+                            sentiment_data = self._get_news_sentiment(symbol)
+                            hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
+                        
                         batch_data[symbol] = hist_data
+                    
+                    # Add delay to avoid rate limits
+                    time.sleep(self.yf_delay)
+                    
                 except Exception as e:
-                    logger.error(f"Error collecting price data for {symbol}: {str(e)}")
+                    logger.error(f"Error collecting data for {symbol}: {str(e)}")
             
-            # Step 2: Fetch fundamental data for all symbols with price data
-            for symbol, hist_data in batch_data.items():
-                try:
-                    # Use rate limiter for fundamental data requests
-                    fundamentals = self._get_fundamental_data(symbol)
-                    for key, value in fundamentals.items():
-                        hist_data[key] = value
-                except Exception as e:
-                    logger.error(f"Error collecting fundamental data for {symbol}: {str(e)}")
-            
-            # Step 3: Add sentiment data if enabled (in a separate batch to avoid mixing API calls)
-            if self.include_news_sentiment:
-                for symbol, hist_data in batch_data.items():
-                    try:
-                        sentiment_data = self._get_news_sentiment(symbol)
-                        hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
-                    except Exception as e:
-                        logger.error(f"Error collecting sentiment data for {symbol}: {str(e)}")
-                        hist_data['news_sentiment'] = 0
-            
-            # Save batch data
-            if batch_data:
-                self.data_manager.save_historical_data(batch_data)
-                all_data.extend(batch_data.values())
+            return batch_data
         
-        # Combine with cached data
-        all_data.extend(cached_data_map.values())
+        # Process batches in parallel
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            results = list(executor.map(process_batch, symbol_batches))
         
-        return pd.concat(all_data) if all_data else pd.DataFrame()
+        # Combine results
+        all_data = {}
+        for batch_result in results:
+            all_data.update(batch_result)
+        
+        # Save to cache
+        self.data_manager.save_historical_data(all_data)
+        
+        # Convert to DataFrame
+        df_list = list(all_data.values())
+        return pd.concat(df_list) if df_list else pd.DataFrame()
     
     # These methods are no longer needed as we're using DataManager directly
     # The functionality is now handled by self.data_manager.load_sentiment_data() and
@@ -237,30 +240,31 @@ class BaseStockDataCollector(ABC):
             return []
     
     def _get_news_sentiment(self, symbol):
-        """Get news sentiment for a stock"""
+        """Get news sentiment using TextBlob"""
         try:
-            # Check if this symbol is in the current batch that needs updating
-            current_batch = self._get_next_sentiment_batch()
-            if symbol not in current_batch and symbol in self.news_cache:
+            if symbol in self.news_cache:
                 return self.news_cache[symbol]
             
             # Get company name for better news search
             company_name = self._get_company_name(symbol)
             
-            # Define the news API request function for rate limiting
-            def fetch_news_articles():
-                url = f"https://newsapi.org/v2/everything"
-                params = {
-                    'q': f'"{company_name}" OR "{symbol}"',
-                    'language': 'en',
-                    'sortBy': 'relevancy',
-                    'pageSize': 10,
-                    'apiKey': self.news_api_key
-                }
-                return requests.get(url, params=params)
+            # Ensure we respect rate limits
+            current_time = time.time()
+            if current_time - self.last_api_call < self.api_call_delay:
+                time.sleep(self.api_call_delay - (current_time - self.last_api_call))
             
-            # Use rate limiter to make the request
-            response = self.rate_limiter.execute_news_request(fetch_news_articles)
+            # Search for news articles
+            url = f"https://newsapi.org/v2/everything"
+            params = {
+                'q': f'"{company_name}" OR "{symbol}"',
+                'language': 'en',
+                'sortBy': 'relevancy',
+                'pageSize': 10,
+                'apiKey': self.news_api_key
+            }
+            
+            response = requests.get(url, params=params)
+            self.last_api_call = time.time()
             
             if response.status_code == 200:
                 articles = response.json().get('articles', [])
@@ -271,13 +275,11 @@ class BaseStockDataCollector(ABC):
                         for article in articles
                     ]
                     
-                    # Calculate sentiment scores
+                    # Calculate sentiment scores using TextBlob
                     sentiments = []
                     for text in texts:
-                        inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-                        outputs = self.sentiment_model(**inputs)
-                        sentiment = torch.softmax(outputs.logits, dim=1)
-                        sentiments.append(sentiment[0][1].item())  # Positive sentiment score
+                        blob = TextBlob(text)
+                        sentiments.append(blob.sentiment.polarity)  # -1 to 1 scale
                     
                     # Calculate weighted average sentiment
                     avg_sentiment = sum(sentiments) / len(sentiments)
@@ -300,6 +302,27 @@ class BaseStockDataCollector(ABC):
             logger.error(f"Error getting news sentiment for {symbol}: {str(e)}")
             return {'sentiment': 0, 'timestamp': datetime.now().isoformat()}
 
+    def _detect_anomalies(self, df):
+        """Detect and handle anomalies in the data"""
+        # Check for price jumps
+        returns = df['Close'].pct_change()
+        mean_return = returns.mean()
+        std_return = returns.std()
+        
+        # Identify outliers (3 standard deviations)
+        outliers = abs(returns - mean_return) > (3 * std_return)
+        
+        # Replace outliers with interpolated values
+        if outliers.any():
+            df.loc[outliers, 'Close'] = df['Close'].interpolate(method='linear')
+            
+            # Recalculate derived columns
+            df['Open'] = df['Open'] * (df['Close'] / df['Close'].shift(0))
+            df['High'] = df['High'] * (df['Close'] / df['Close'].shift(0))
+            df['Low'] = df['Low'] * (df['Close'] / df['Close'].shift(0))
+        
+        return df
+
 class UKStockDataCollector(BaseStockDataCollector):
     def _fetch_market_data(self):
         """Fetch both symbols and company names for FTSE stocks"""
@@ -307,28 +330,34 @@ class UKStockDataCollector(BaseStockDataCollector):
             ftse_url = "https://en.wikipedia.org/wiki/FTSE_100_Index"
             response = requests.get(ftse_url)
             soup = BeautifulSoup(response.text, 'html.parser')
-            tables = soup.find_all('table', {'class': 'wikitable'})
+            tables = soup.find_all('table', {'id': 'constituents'})
             
             for table in tables:
-                rows = table.find_all('tr')[1:]
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) >= 2:
-                        company_name = cols[0].text.strip()
-                        symbol_text = cols[1].text.strip()
+                rows = table.find_all('tr')
+                # Get headers to identify the ticker column
+                headers = [th.text.strip() for th in rows[0].find_all('th')]
+                ticker_col_idx = 1  # Default to second column (index 1)
+                
+                # Find the index of the 'Ticker' column if headers exist
+                if 'Ticker' in headers:
+                    ticker_col_idx = headers.index('Ticker')
+                
+                for row in rows[1:]:  # Skip header row
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) > ticker_col_idx:
+                        company_name = cells[0].text.strip()
+                        ticker = cells[ticker_col_idx].text.strip()
                         
-                        # Skip if the symbol contains numeric values (likely a price)
-                        if any(char.isdigit() for char in symbol_text):
-                            continue
-                        
-                        # Store both with and without .L suffix
-                        symbol_with_suffix = symbol_text + '.L'
-                        self.symbol_to_name_map[symbol_with_suffix] = company_name
-                        self.symbol_to_name_map[symbol_text] = company_name
+                        # Format ticker for UK market (add .L suffix)
+                        if ticker and len(ticker) > 0:
+                            symbol_with_suffix = ticker + '.L'
+                            self.symbol_to_name_map[symbol_with_suffix] = company_name
             
             # Ensure we have symbols
             if not self.symbol_to_name_map:
                 raise ValueError("No valid FTSE symbols could be extracted from the webpage")
+                
+            logger.info(f"Successfully extracted {len(self.symbol_to_name_map)} UK stock symbols")
                 
         except Exception as e:
             logger.error(f"Error fetching UK market data: {str(e)}")
@@ -340,28 +369,28 @@ class USStockDataCollector(BaseStockDataCollector):
             sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
             response = requests.get(sp500_url)
             soup = BeautifulSoup(response.text, 'html.parser')
-            table = soup.find('table', {'class': 'wikitable'})
+            
+            table = soup.find('table', {'id': 'constituents'})
+            self.symbol_to_name_map = {}
             
             if table:
-                rows = table.find_all('tr')[1:]
+                rows = table.find_all('tr')[1:]  # Skip header row
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 2:
-                        symbol_text = cols[0].text.strip()
+                        symbol = cols[0].text.strip()
                         company_name = cols[1].text.strip()
                         
-                        # Skip problematic symbols and clean others
-                        if symbol_text and not any(char.isdigit() for char in symbol_text):
-                            # Remove .B suffix and other problematic characters
-                            clean_symbol = symbol_text.split('.')[0]
-                            if clean_symbol and not any(x in clean_symbol for x in ['-', '.', '$']):
-                                self.symbol_to_name_map[clean_symbol] = company_name
+                        # Clean up symbol (remove .B, etc.)
+                        clean_symbol = symbol.split('.')[0]
+                        
+                        # Skip problematic symbols
+                        if clean_symbol and not any(char in clean_symbol for char in ['-', '$']):
+                            self.symbol_to_name_map[clean_symbol] = company_name
             
-            # Ensure we have symbols
-            if not self.symbol_to_name_map:
-                raise ValueError("No valid S&P 500 symbols could be extracted")
-                
             logger.info(f"Found {len(self.symbol_to_name_map)} valid US stock symbols")
+            return list(self.symbol_to_name_map.keys())
             
         except Exception as e:
             logger.error(f"Error fetching US market data: {str(e)}")
+            return []
