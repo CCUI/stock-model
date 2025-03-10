@@ -47,7 +47,9 @@ class StockPredictor:
             if extra_features:
                 for col in extra_features:
                     if col in latest_data.columns:
-                        latest_data = latest_data.drop(columns=[col])
+                        # Instead of dropping these columns, keep them for the report
+                        # but don't include them in the prediction features
+                        pass
             
             # Prepare features for prediction
             X = latest_data[self.feature_cols]

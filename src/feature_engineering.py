@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from .config import FEATURE_COLUMNS, TECHNICAL_INDICATORS, FEATURES_TO_SCALE
+from .sentiment_processor import SentimentProcessor
 import gc
 import logging
 
@@ -16,6 +17,9 @@ class FeatureEngineer:
         """Generate features in chunks to reduce memory usage"""
         # Group by symbol
         grouped = stock_data.groupby('Symbol')
+        
+        # Initialize sentiment processor
+        sentiment_processor = SentimentProcessor()
         
         # Process in chunks
         all_features = []
@@ -45,6 +49,10 @@ class FeatureEngineer:
                 chunk_df = pd.concat(chunk_data)
                 chunk_df = self._handle_missing_values(chunk_df)
                 chunk_df = self._scale_features(chunk_df)
+                
+                # Add sentiment features
+                chunk_df = sentiment_processor.add_sentiment_features(chunk_df)
+                
                 all_features.append(chunk_df)
                 
                 # Clear memory

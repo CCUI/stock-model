@@ -142,35 +142,48 @@ class BaseStockDataCollector(ABC):
             batch_data = {}
             for symbol in batch_symbols:
                 try:
-                    # Check cache first
+                    # Check if we need to fetch new data
+                    need_fresh_data = True
                     cached_data = self.historical_cache.get(symbol, {}).get('data', None)
+                    
+                    # Only use cache if it contains data for the requested end_date
                     if cached_data is not None:
-                        batch_data[symbol] = cached_data
-                        continue
+                        if isinstance(cached_data, pd.DataFrame):
+                            df = cached_data
+                        else:
+                            df = cached_data
+                        
+                        # Check if the cache contains data for the requested end date
+                        if not df.empty and df.index.max().date() >= end_date.date():
+                            batch_data[symbol] = df
+                            need_fresh_data = False
                     
-                    # Fetch new data
-                    stock = yf.Ticker(symbol)
-                    hist_data = stock.history(start=start_date, end=end_date)
-                    
-                    if not hist_data.empty:
-                        # Add fundamental data
-                        fundamentals = self._get_fundamental_data(symbol)
-                        for key, value in fundamentals.items():
-                            hist_data[key] = value
+                    if need_fresh_data:
+                        # Fetch new data - use end_date + 1 day to ensure we get data for end_date
+                        # This is because yfinance's end date is exclusive
+                        stock = yf.Ticker(symbol)
+                        next_day = end_date + timedelta(days=1)
+                        hist_data = stock.history(start=start_date, end=next_day)
                         
-                        # Add symbol column
-                        hist_data['Symbol'] = symbol
-                        
-                        # Add company name column
-                        company_name = self._get_company_name(symbol)
-                        hist_data['CompanyName'] = company_name
-                        
-                        # Add news sentiment if enabled
-                        if self.include_news_sentiment:
-                            sentiment_data = self._get_news_sentiment(symbol)
-                            hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
-                        
-                        batch_data[symbol] = hist_data
+                        if not hist_data.empty:
+                            # Add fundamental data
+                            fundamentals = self._get_fundamental_data(symbol)
+                            for key, value in fundamentals.items():
+                                hist_data[key] = value
+                            
+                            # Add symbol column
+                            hist_data['Symbol'] = symbol
+                            
+                            # Add company name column
+                            company_name = self._get_company_name(symbol)
+                            hist_data['CompanyName'] = company_name
+                            
+                            # Add news sentiment if enabled
+                            if self.include_news_sentiment:
+                                sentiment_data = self._get_news_sentiment(symbol)
+                                hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
+                            
+                            batch_data[symbol] = hist_data
                     
                     # Add delay to avoid rate limits
                     time.sleep(self.yf_delay)

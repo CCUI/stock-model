@@ -10,8 +10,7 @@ FEATURE_COLUMNS = [
     # Fundamental Features
     'marketCap', 'trailingPE', 'priceToBook', 'debtToEquity',
     # Sentiment Features
-    'news_sentiment'
-    # Removed: 'social_sentiment', 'sector_sentiment', 'market_sentiment'
+    'news_sentiment', 'social_sentiment', 'sector_sentiment', 'market_sentiment'
 ]
 
 # Technical indicators to be forward filled
@@ -25,8 +24,8 @@ TECHNICAL_INDICATORS = [
 FEATURES_TO_SCALE = [
     'ADX', 'ATR', 'OBV', 'CMF',
     'Returns', 'Returns_5d', 'Returns_20d',
-    'Volatility_5d', 'Volatility_20d'
-    # Removed: 'social_sentiment', 'sector_sentiment', 'market_sentiment'
+    'Volatility_5d', 'Volatility_20d',
+    'social_sentiment', 'sector_sentiment', 'market_sentiment'
 ]
 
 # Additional technical indicators (not used as features but needed for analysis)

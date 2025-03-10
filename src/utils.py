@@ -11,8 +11,21 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 def get_uk_trading_day(date):
-    """Get the last UK trading day from a given date"""
-    # Adjust for weekends
+    """Get the current UK trading day or last trading day if current day is weekend or current day's data isn't available yet"""
+    current_time = datetime.now()
+    
+    # If current day is a weekday, use it only if it's after market close (4:30 PM UK time)
+    if date.weekday() <= 4:  # 0-4 are Monday to Friday
+        # If it's today and before market close, use previous trading day
+        if date.date() == current_time.date() and current_time.hour < 16:  # Before 4 PM
+            # Go back to the previous day
+            date = date - timedelta(days=1)
+            # If it's a weekend, adjust further
+            while date.weekday() > 4:  # 5 is Saturday, 6 is Sunday
+                date = date - timedelta(days=1)
+        return date
+    
+    # If it's a weekend, adjust to the last weekday
     while date.weekday() > 4:  # 5 is Saturday, 6 is Sunday
         date = date - timedelta(days=1)
     
@@ -20,8 +33,21 @@ def get_uk_trading_day(date):
     return date
 
 def get_us_trading_day(date):
-    """Get the last US trading day from a given date"""
-    # Adjust for weekends
+    """Get the current US trading day or last trading day if current day is weekend or current day's data isn't available yet"""
+    current_time = datetime.now()
+    
+    # If current day is a weekday, use it only if it's after market close (4:00 PM EST)
+    if date.weekday() <= 4:  # 0-4 are Monday to Friday
+        # If it's today and before market close, use previous trading day
+        if date.date() == current_time.date() and current_time.hour < 16:  # Before 4 PM
+            # Go back to the previous day
+            date = date - timedelta(days=1)
+            # If it's a weekend, adjust further
+            while date.weekday() > 4:  # 5 is Saturday, 6 is Sunday
+                date = date - timedelta(days=1)
+        return date
+    
+    # If it's a weekend, adjust to the last weekday
     while date.weekday() > 4:  # 5 is Saturday, 6 is Sunday
         date = date - timedelta(days=1)
     
@@ -29,7 +55,7 @@ def get_us_trading_day(date):
     return date
 
 def get_trading_day(market, date):
-    """Get the last trading day for the specified market"""
+    """Get the current trading day for the specified market or last trading day if current day is weekend"""
     if market.upper() == 'UK':
         return get_uk_trading_day(date)
     elif market.upper() == 'US':
