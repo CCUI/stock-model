@@ -30,7 +30,7 @@ def run_analysis(market, include_news_sentiment, analysis_date):
         })
 
         # Run the main analysis
-        predictions, report = main(
+        predictions, report, prediction_history = main(
             market=market,
             analysis_date=analysis_date,
             include_news_sentiment=include_news_sentiment
@@ -40,7 +40,8 @@ def run_analysis(market, include_news_sentiment, analysis_date):
         progress_queue.put({
             'step': 'Analysis complete',
             'status': 'complete',
-            'report': report
+            'report': report,
+            'prediction_history': prediction_history
         })
 
     except Exception as e:

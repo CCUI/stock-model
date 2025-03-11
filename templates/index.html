@@ -95,6 +95,14 @@
         <div id="resultsSection" class="d-none">
             <h2 class="mb-4">Top Stock Predictions</h2>
             <div id="stockCards" class="row"></div>
+            
+            <!-- Prediction History Section -->
+            <div id="historySection" class="mt-5">
+                <h3 class="mb-3">Prediction History <small class="text-muted">(Last 5 days)</small></h3>
+                <div class="list-group" id="predictionHistoryList">
+                    <!-- History items will be added here dynamically -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -115,6 +123,7 @@
             const progressSection = document.getElementById('progressSection');
             const resultsSection = document.getElementById('resultsSection');
             const stockCards = document.getElementById('stockCards');
+            const historyList = document.getElementById('predictionHistoryList');
 
             // Update form data to include correct checkbox value
             formData.set('include_news', document.getElementById('includeNews').checked);
@@ -123,6 +132,7 @@
             loadingIndicator.classList.remove('d-none');
             resultsSection.classList.add('d-none');
             stockCards.innerHTML = '';
+            historyList.innerHTML = '';
 
             try {
                 // Start the analysis
@@ -140,6 +150,36 @@
                     if (progressData.status === 'complete' && progressData.report) {
                         // Show results section
                         resultsSection.classList.remove('d-none');
+                        
+                        // Display prediction history if available
+                        if (progressData.prediction_history && progressData.prediction_history.length > 0) {
+                            // Clear existing history items
+                            historyList.innerHTML = '';
+                            
+                            // Add each history record
+                            progressData.prediction_history.forEach((record, index) => {
+                                const historyItem = document.createElement('a');
+                                historyItem.className = 'list-group-item list-group-item-action';
+                                historyItem.href = '#';
+                                historyItem.innerHTML = `
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h5 class="mb-1">${record.date} - ${record.market} Market</h5>
+                                        <small>${index === 0 ? '<span class="badge bg-primary">Latest</span>' : ''}</small>
+                                    </div>
+                                    <p class="mb-1">Contains predictions for ${record.report.length} stocks</p>
+                                    <small>Click to view details</small>
+                                `;
+                                
+                                // Add click event to show the historical prediction
+                                historyItem.addEventListener('click', (e) => {
+                                    e.preventDefault();
+                                    // Future enhancement: Show detailed view of this historical prediction
+                                    alert(`Prediction details for ${record.date} will be shown in a future update.`);
+                                });
+                                
+                                historyList.appendChild(historyItem);
+                            });
+                        }
                         
                         // Process and display each stock prediction
                         progressData.report.forEach(stock => {

@@ -7,6 +7,7 @@ from src.model_trainer import ModelTrainer
 from src.predictor import StockPredictor
 from src.utils import setup_logging, get_trading_day
 from src.load_env import load_environment_variables
+from src.prediction_history import PredictionHistoryManager
 import argparse
 
 def main(market='UK', analysis_date=None, include_news_sentiment=True):
@@ -55,11 +56,23 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         logger.info("Generating analysis report...")
         report = predictor.generate_analysis_report(predictions, features_df)
         
+        # Save prediction to history
+        logger.info("Saving prediction to history...")
+        history_manager = PredictionHistoryManager(market=market)
+        history_manager.save_prediction(predictions, report, analysis_date)
+        
         print(f"\nTop 10 Predicted Gainers for Tomorrow ({market} Market):")
         print("=====================================")
         print(report)
         
-        return predictions, report
+        # Get prediction history
+        prediction_history = history_manager.get_prediction_history()
+        print(f"\nPrediction History (Last {len(prediction_history)} records):")
+        print("=====================================")
+        for i, record in enumerate(prediction_history):
+            print(f"Record {i+1}: {record['date']} - {record['market']} Market")
+        
+        return predictions, report, prediction_history
         
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
