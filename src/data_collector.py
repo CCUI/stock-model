@@ -126,88 +126,136 @@ class BaseStockDataCollector(ABC):
 
     def collect_historical_data(self, end_date, lookback_days=365):
         """Collect historical data using parallel processing"""
-        start_date = end_date - timedelta(days=lookback_days)
-        
-        # Load cache
-        self.historical_cache = self.data_manager.load_historical_data()
-        
-        # Create batches of symbols
-        symbol_batches = [
-            self.symbols[i:i+self.batch_size] 
-            for i in range(0, len(self.symbols), self.batch_size)
-        ]
-        
-        # Function to process a batch
-        def process_batch(batch_symbols):
-            batch_data = {}
-            for symbol in batch_symbols:
-                try:
-                    # Check if we need to fetch new data
-                    need_fresh_data = True
-                    cached_data = self.historical_cache.get(symbol, {}).get('data', None)
-                    
-                    # Only use cache if it contains data for the requested end_date
-                    if cached_data is not None:
-                        if isinstance(cached_data, pd.DataFrame):
-                            df = cached_data
-                        else:
-                            df = cached_data
-                        
-                        # Check if the cache contains data for the requested end date
-                        if not df.empty and df.index.max().date() >= end_date.date():
-                            batch_data[symbol] = df
-                            need_fresh_data = False
-                    
-                    if need_fresh_data:
-                        # Fetch new data - use end_date + 1 day to ensure we get data for end_date
-                        # This is because yfinance's end date is exclusive
-                        stock = yf.Ticker(symbol)
-                        next_day = end_date + timedelta(days=1)
-                        hist_data = stock.history(start=start_date, end=next_day)
-                        
-                        if not hist_data.empty:
-                            # Add fundamental data
-                            fundamentals = self._get_fundamental_data(symbol)
-                            for key, value in fundamentals.items():
-                                hist_data[key] = value
-                            
-                            # Add symbol column
-                            hist_data['Symbol'] = symbol
-                            
-                            # Add company name column
-                            company_name = self._get_company_name(symbol)
-                            hist_data['CompanyName'] = company_name
-                            
-                            # Add news sentiment if enabled
-                            if self.include_news_sentiment:
-                                sentiment_data = self._get_news_sentiment(symbol)
-                                hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
-                            
-                            batch_data[symbol] = hist_data
-                    
-                    # Add delay to avoid rate limits
-                    time.sleep(self.yf_delay)
-                    
-                except Exception as e:
-                    logger.error(f"Error collecting data for {symbol}: {str(e)}")
+        try:
+            # Ensure end_date is a datetime object
+            if isinstance(end_date, str):
+                end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            elif not isinstance(end_date, datetime):
+                raise ValueError(f"Invalid end_date type: {type(end_date)}. Expected datetime or string in YYYY-MM-DD format.")
             
-            return batch_data
-        
-        # Process batches in parallel
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            results = list(executor.map(process_batch, symbol_batches))
-        
-        # Combine results
-        all_data = {}
-        for batch_result in results:
-            all_data.update(batch_result)
-        
-        # Save to cache
-        self.data_manager.save_historical_data(all_data)
-        
-        # Convert to DataFrame
-        df_list = list(all_data.values())
-        return pd.concat(df_list) if df_list else pd.DataFrame()
+            # Calculate start date
+            start_date = end_date - timedelta(days=lookback_days)
+            
+            # Load cache
+            self.historical_cache = self.data_manager.load_historical_data()
+            
+            # Check if we need to update sentiment data
+            if self.include_news_sentiment:
+                try:
+                    # Load last update information
+                    last_update = {}
+                    if self.last_sentiment_update_file.exists():
+                        with open(self.last_sentiment_update_file, 'r') as f:
+                            last_update = json.load(f)
+                    
+                    # Check if we need to update sentiment (update daily)
+                    last_update_time = datetime.fromisoformat(last_update.get('last_update', '2000-01-01'))
+                    if (datetime.now() - last_update_time).days >= 1:
+                        logger.info("Updating sentiment data...")
+                        # Get next batch of stocks that need sentiment updates
+                        symbols_to_update = self._get_next_sentiment_batch()
+                        
+                        # Update sentiment for each symbol
+                        for symbol in symbols_to_update:
+                            try:
+                                sentiment_data = self._get_news_sentiment(symbol)
+                                self.news_cache[symbol] = sentiment_data
+                                # Save after each update to prevent data loss
+                                self.data_manager.save_sentiment_data(self.news_cache)
+                                time.sleep(self.api_call_delay)  # Respect rate limits
+                            except Exception as e:
+                                logger.error(f"Error updating sentiment for {symbol}: {str(e)}")
+                        
+                        # Update last update time
+                        last_update['last_update'] = datetime.now().isoformat()
+                        with open(self.last_sentiment_update_file, 'w') as f:
+                            json.dump(last_update, f)
+                        
+                        logger.info("Sentiment data update completed")
+                except Exception as e:
+                    logger.error(f"Error updating sentiment data: {str(e)}")
+            
+            # Create batches of symbols
+            symbol_batches = [
+                self.symbols[i:i+self.batch_size] 
+                for i in range(0, len(self.symbols), self.batch_size)
+            ]
+            
+            # Function to process a batch
+            def process_batch(batch_symbols):
+                batch_data = {}
+                for symbol in batch_symbols:
+                    try:
+                        # Check if we need to fetch new data
+                        need_fresh_data = True
+                        cached_data = self.historical_cache.get(symbol, {}).get('data', None)
+                        
+                        # Only use cache if it contains data for the requested end_date
+                        if cached_data is not None:
+                            if isinstance(cached_data, pd.DataFrame):
+                                df = cached_data
+                            else:
+                                df = cached_data
+                            
+                            # Check if the cache contains data for the requested end date
+                            if not df.empty and df.index.max().date() >= end_date.date():
+                                batch_data[symbol] = df
+                                need_fresh_data = False
+                        
+                        if need_fresh_data:
+                            # Fetch new data - use end_date + 1 day to ensure we get data for end_date
+                            # This is because yfinance's end date is exclusive
+                            stock = yf.Ticker(symbol)
+                            next_day = end_date + timedelta(days=1)
+                            hist_data = stock.history(start=start_date, end=next_day)
+                            
+                            if not hist_data.empty:
+                                # Add fundamental data
+                                fundamentals = self._get_fundamental_data(symbol)
+                                for key, value in fundamentals.items():
+                                    hist_data[key] = value
+                                
+                                # Add symbol column
+                                hist_data['Symbol'] = symbol
+                                
+                                # Add company name column
+                                company_name = self._get_company_name(symbol)
+                                hist_data['CompanyName'] = company_name
+                                
+                                # Add news sentiment if enabled
+                                if self.include_news_sentiment:
+                                    sentiment_data = self._get_news_sentiment(symbol)
+                                    hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
+                                
+                                batch_data[symbol] = hist_data
+                        
+                        # Add delay to avoid rate limits
+                        time.sleep(self.yf_delay)
+                        
+                    except Exception as e:
+                        logger.error(f"Error collecting data for {symbol}: {str(e)}")
+                
+                return batch_data
+            
+            # Process batches in parallel
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                results = list(executor.map(process_batch, symbol_batches))
+            
+            # Combine results
+            all_data = {}
+            for batch_result in results:
+                all_data.update(batch_result)
+            
+            # Save to cache
+            self.data_manager.save_historical_data(all_data)
+            
+            # Convert to DataFrame
+            df_list = list(all_data.values())
+            return pd.concat(df_list) if df_list else pd.DataFrame()
+            
+        except Exception as e:
+            logger.error(f"Error in collect_historical_data: {str(e)}")
+            return pd.DataFrame()
     
     # These methods are no longer needed as we're using DataManager directly
     # The functionality is now handled by self.data_manager.load_sentiment_data() and
