@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 import logging
 from datetime import datetime, timedelta
+from src.database_manager import DatabaseManager
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,6 +18,7 @@ class PredictionEvaluator:
         self.data_dir = Path(__file__).parent / 'data'
         self.market_dir = self.data_dir / self.market.lower()
         self.prediction_history_file = self.market_dir / 'prediction_history.json'
+        self.db_manager = DatabaseManager(market=self.market)
         
     def load_prediction_history(self):
         """Load prediction history from file"""
@@ -40,40 +42,26 @@ class PredictionEvaluator:
             return []
     
     def load_historical_data(self):
-        """Load historical market data from chunks"""
+        """Load historical market data from database"""
         try:
-            historical_cache_file = self.market_dir / 'historical_cache.json'
+            # Load all historical data from the database
+            data_dict = self.db_manager.load_historical_data()
             
-            if not historical_cache_file.exists():
-                logger.error(f"Historical cache file not found: {historical_cache_file}")
+            if not data_dict:
+                logger.error("No historical data found in database.")
                 return {}
             
-            with open(historical_cache_file, 'r') as f:
-                index = json.load(f)
-            
-            data_dict = {}
-            for chunk_file in index['chunks'].values():
-                chunk_path = self.market_dir / chunk_file
-                if chunk_path.exists():
-                    with open(chunk_path, 'r') as f:
-                        chunk_data = json.load(f)
-                        for symbol, data in chunk_data.items():
-                            try:
-                                df = pd.DataFrame(data['data'])
-                                if 'Date' in df.columns:
-                                    df.set_index('Date', inplace=True)
-                                    df.index = pd.to_datetime(df.index)
-                                # Ensure Symbol column is present
-                                if 'Symbol' not in df.columns:
-                                    df['Symbol'] = symbol
-                                # Ensure CompanyName column is present
-                                if 'CompanyName' not in df.columns and 'company_name' in data:
-                                    df['CompanyName'] = data['company_name']
-                                elif 'CompanyName' not in df.columns:
-                                    df['CompanyName'] = 'Unknown'
-                                data_dict[symbol] = df
-                            except Exception as e:
-                                logger.error(f"Error loading data for {symbol}: {str(e)}")
+            # Ensure each DataFrame has the required columns
+            for symbol, df in data_dict.items():
+                try:
+                    # Ensure Symbol column is present
+                    if 'Symbol' not in df.columns:
+                        df['Symbol'] = symbol
+                    # Ensure CompanyName column is present
+                    if 'CompanyName' not in df.columns:
+                        df['CompanyName'] = 'Unknown'
+                except Exception as e:
+                    logger.error(f"Error processing data for {symbol}: {str(e)}")
             
             return data_dict
             

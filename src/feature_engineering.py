@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from .config import FEATURE_COLUMNS, TECHNICAL_INDICATORS, FEATURES_TO_SCALE
-from .sentiment_processor import SentimentProcessor
 import gc
 import logging
 
@@ -17,9 +16,6 @@ class FeatureEngineer:
         """Generate features in chunks to reduce memory usage"""
         # Group by symbol
         grouped = stock_data.groupby('Symbol')
-        
-        # Initialize sentiment processor
-        sentiment_processor = SentimentProcessor()
         
         # Process in chunks
         all_features = []
@@ -51,7 +47,7 @@ class FeatureEngineer:
                 chunk_df = self._scale_features(chunk_df)
                 
                 # Add sentiment features
-                chunk_df = sentiment_processor.add_sentiment_features(chunk_df)
+                chunk_df = self._add_sentiment_features(chunk_df)
                 
                 all_features.append(chunk_df)
                 
@@ -165,6 +161,55 @@ class FeatureEngineer:
         scale_cols = [col for col in FEATURES_TO_SCALE if col in df.columns]
         if scale_cols:
             df[scale_cols] = self.scaler.fit_transform(df[scale_cols])
+        
+        return df
+    
+    def _add_sentiment_features(self, df):
+        """Add sentiment-based features to the DataFrame"""
+        try:
+            # Initialize sentiment columns with 0
+            sentiment_cols = ['news_sentiment', 'social_sentiment', 'sector_sentiment', 'market_sentiment']
+            for col in sentiment_cols:
+                if col not in df.columns:
+                    df[col] = 0.0
+            
+            # Use existing news sentiment if available
+            if 'news_sentiment' in df.columns:
+                # Calculate rolling mean of sentiment
+                df['sentiment_ma5'] = df.groupby('Symbol')['news_sentiment'].rolling(window=5).mean().reset_index(0, drop=True)
+                df['sentiment_ma10'] = df.groupby('Symbol')['news_sentiment'].rolling(window=10).mean().reset_index(0, drop=True)
+                
+                # Calculate sentiment momentum
+                df['sentiment_momentum'] = df.groupby('Symbol')['news_sentiment'].diff()
+                
+                # Calculate sentiment volatility
+                df['sentiment_volatility'] = df.groupby('Symbol')['news_sentiment'].rolling(window=5).std().reset_index(0, drop=True)
+                
+                # Approximate social sentiment based on news sentiment
+                df['social_sentiment'] = df['sentiment_ma5'].fillna(0)
+                
+                # Approximate sector sentiment based on average sentiment across all stocks
+                df['sector_sentiment'] = df.groupby(df.index)['news_sentiment'].transform('mean').fillna(0)
+                
+                # Approximate market sentiment based on weighted average of all sentiments
+                df['market_sentiment'] = (
+                    df['news_sentiment'] * 0.4 +
+                    df['social_sentiment'] * 0.3 +
+                    df['sector_sentiment'] * 0.3
+                ).fillna(0)
+                
+                # Fill missing values
+                sentiment_cols = [
+                    'sentiment_ma5', 'sentiment_ma10', 'sentiment_momentum', 'sentiment_volatility',
+                    'news_sentiment', 'social_sentiment', 'sector_sentiment', 'market_sentiment'
+                ]
+                df[sentiment_cols] = df[sentiment_cols].fillna(method='ffill')
+                df[sentiment_cols] = df[sentiment_cols].fillna(0)  # Fill remaining NaNs with 0
+            else:
+                logger.warning("No sentiment data found in DataFrame")
+            
+        except Exception as e:
+            logger.error(f"Error adding sentiment features: {str(e)}")
         
         return df
     

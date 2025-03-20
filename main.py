@@ -1,20 +1,21 @@
 import os
 import pandas as pd
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from src.data_collector import UKStockDataCollector, USStockDataCollector
 from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.predictor import StockPredictor
 from src.utils import setup_logging, get_trading_day
-from src.load_env import load_environment_variables
 from src.prediction_history import PredictionHistoryManager
 import argparse
+import sys
 
-def main(market='UK', analysis_date=None, include_news_sentiment=True):
+def main(market='UK', analysis_date=None, include_news_sentiment=True, refresh_cache=False):
     # Load environment variables
-    load_environment_variables()
+    load_dotenv()
     
-    # Setup logging
+    # Set up logging
     logger = setup_logging()
     
     # If no date provided, use the last trading day based on the selected market
@@ -31,6 +32,12 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
             data_collector = USStockDataCollector(market='US', include_news_sentiment=include_news_sentiment)
         else:
             raise ValueError(f"Unsupported market: {market}. Available markets: UK, US")
+        
+        # Refresh cache if requested
+        if refresh_cache:
+            logger.info("Refreshing cache...")
+            data_collector.data_manager.refresh_cache()
+            logger.info("Cache refresh completed")
             
         feature_engineer = FeatureEngineer()
         model_trainer = ModelTrainer()
@@ -79,22 +86,27 @@ def main(market='UK', analysis_date=None, include_news_sentiment=True):
         raise
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Stock Market Analysis Tool')
-    parser.add_argument('--market', type=str, choices=['UK', 'US'], default='UK',
-                      help='Market to analyze (UK or US)')
-    parser.add_argument('--no-news', action='store_true',
-                      help='Disable news sentiment analysis')
-    parser.add_argument('--date', type=str,
-                      help='Analysis date (YYYY-MM-DD format)')
+    parser = argparse.ArgumentParser(description='Stock Market Analysis and Prediction')
+    parser.add_argument('--market', choices=['UK', 'US'], default='UK', help='Market to analyze (UK or US)')
+    parser.add_argument('--date', help='Analysis date (YYYY-MM-DD format)')
+    parser.add_argument('--no-sentiment', action='store_true', help='Disable news sentiment analysis')
+    parser.add_argument('--refresh-cache', action='store_true', help='Refresh all cache files')
     
     args = parser.parse_args()
     
+    # Convert date string to datetime if provided
     analysis_date = None
     if args.date:
-        analysis_date = datetime.strptime(args.date, '%Y-%m-%d')
+        try:
+            analysis_date = datetime.strptime(args.date, '%Y-%m-%d')
+        except ValueError:
+            print("Error: Date must be in YYYY-MM-DD format")
+            sys.exit(1)
     
+    # Run main function with arguments
     main(
         market=args.market,
         analysis_date=analysis_date,
-        include_news_sentiment=not args.no_news
+        include_news_sentiment=not args.no_sentiment,
+        refresh_cache=args.refresh_cache
     )

@@ -1,23 +1,38 @@
 import yfinance as yf
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
+import numpy as np
 from datetime import datetime, timedelta
-from textblob import TextBlob
-import os
-from dotenv import load_dotenv
-from pathlib import Path
 import time
-from abc import ABC, abstractmethod
-from tqdm import tqdm
-import json
-from .data_manager import DataManager
 import logging
-from .utils import setup_logging
-from .enhanced_rate_limiter import EnhancedAPIRateLimiter
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from abc import ABC, abstractmethod
+import os
+import json
+from typing import Dict, List, Optional, Tuple
+from .database_manager import DatabaseManager
 
-logger = setup_logging()
+logger = logging.getLogger(__name__)
+
+class EnhancedAPIRateLimiter:
+    def __init__(self, max_requests_per_minute=60):
+        self.max_requests = max_requests_per_minute
+        self.requests = []
+        self.lock = threading.Lock()
+
+    def wait_if_needed(self):
+        with self.lock:
+            now = time.time()
+            # Remove requests older than 1 minute
+            self.requests = [req_time for req_time in self.requests if now - req_time < 60]
+            
+            if len(self.requests) >= self.max_requests:
+                # Wait until the oldest request is more than 1 minute old
+                sleep_time = 60 - (now - self.requests[0])
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+            
+            self.requests.append(now)
 
 class BaseStockDataCollector(ABC):
     def __init__(self, market='UK', include_news_sentiment=True):
@@ -40,10 +55,9 @@ class BaseStockDataCollector(ABC):
         
         self.include_news_sentiment = include_news_sentiment
         self.symbols = self._get_symbols()
-        self.data_manager = DataManager(market=self.market)
         
-        # Initialize historical cache from market-specific directory
-        self.historical_cache = self.data_manager.load_historical_data()
+        # Initialize database manager
+        self.db_manager = DatabaseManager(market=self.market)
         
         if include_news_sentiment:
             # Load news API key
@@ -53,7 +67,7 @@ class BaseStockDataCollector(ABC):
                 self.include_news_sentiment = False
             
             # Initialize news cache
-            self.news_cache = self.data_manager.load_sentiment_data()
+            self.news_cache = self.db_manager.load_sentiment_data()
             self.last_api_call = 0
             self.api_call_delay = 1.0  # Delay between API calls in seconds
             
@@ -63,9 +77,9 @@ class BaseStockDataCollector(ABC):
                 raise ValueError("NEWS_API_KEY not found in environment variables")
                 
             # Initialize cache for news data
-            self.news_cache = self.data_manager.load_sentiment_data()
+            self.news_cache = self.db_manager.load_sentiment_data()
             self.daily_api_limit = 100  # NewsAPI free tier limit
-            self.last_sentiment_update_file = self.data_manager.market_dir / 'last_sentiment_update.json'
+            self.last_sentiment_update_file = self.db_manager.market_dir / 'last_sentiment_update.json'
     
     @abstractmethod
     def _fetch_market_data(self):
@@ -136,9 +150,6 @@ class BaseStockDataCollector(ABC):
             # Calculate start date
             start_date = end_date - timedelta(days=lookback_days)
             
-            # Load cache
-            self.historical_cache = self.data_manager.load_historical_data()
-            
             # Check if we need to update sentiment data
             if self.include_news_sentiment:
                 try:
@@ -167,7 +178,7 @@ class BaseStockDataCollector(ABC):
                                     sentiment_data = self._get_news_sentiment(symbol)
                                     self.news_cache[symbol] = sentiment_data
                                     # Save after each update to prevent data loss
-                                    self.data_manager.save_sentiment_data(self.news_cache)
+                                    self.db_manager.save_sentiment_data(self.news_cache)
                                     time.sleep(self.api_call_delay)  # Respect rate limits
                                     logger.info(f"Updated sentiment for {symbol}")
                                 except Exception as e:
@@ -197,17 +208,14 @@ class BaseStockDataCollector(ABC):
                     try:
                         # Check if we need to fetch new data
                         need_fresh_data = True
-                        cached_data = self.historical_cache.get(symbol, {}).get('data', None)
+                        cached_data = self.db_manager.load_historical_data(symbols=[symbol], start_date=start_date, end_date=end_date)
                         
                         # Only use cache if it contains data for the requested end_date
-                        if cached_data is not None:
-                            if isinstance(cached_data, pd.DataFrame):
-                                df = cached_data
-                            else:
-                                df = cached_data
-                            
-                            # Check if the cache contains data for the requested end date
+                        if symbol in cached_data:
+                            df = cached_data[symbol]
                             if not df.empty and df.index.max().date() >= end_date.date():
+                                # Ensure Symbol column exists
+                                df['Symbol'] = symbol
                                 batch_data[symbol] = df
                                 need_fresh_data = False
                         
@@ -236,10 +244,22 @@ class BaseStockDataCollector(ABC):
                                     sentiment_data = self._get_news_sentiment(symbol)
                                     hist_data['news_sentiment'] = sentiment_data.get('sentiment', 0)
                                 
+                                # Ensure all required columns exist
+                                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                                for col in required_columns:
+                                    if col not in hist_data.columns:
+                                        logger.error(f"Missing required column {col} for {symbol}")
+                                        raise ValueError(f"Missing required column {col}")
+                                
                                 batch_data[symbol] = hist_data
-                        
-                        # Add delay to avoid rate limits
-                        time.sleep(self.yf_delay)
+                                
+                                # Save to database
+                                self.db_manager.save_historical_data({symbol: hist_data})
+                                
+                                # Add delay to respect rate limits
+                                time.sleep(self.yf_delay)
+                            else:
+                                logger.warning(f"No data returned for {symbol}")
                         
                     except Exception as e:
                         logger.error(f"Error collecting data for {symbol}: {str(e)}")
@@ -255,15 +275,21 @@ class BaseStockDataCollector(ABC):
             for batch_result in results:
                 all_data.update(batch_result)
             
-            # Save to cache
-            self.data_manager.save_historical_data(all_data)
+            # Save to SQLite database
+            self.db_manager.save_historical_data(all_data)
             
-            # Convert to DataFrame
-            df_list = list(all_data.values())
+            # Convert to DataFrame and ensure Symbol column exists
+            df_list = []
+            for symbol, df in all_data.items():
+                if not df.empty:
+                    # Ensure Symbol column exists
+                    df['Symbol'] = symbol
+                    df_list.append(df)
+            
             return pd.concat(df_list) if df_list else pd.DataFrame()
             
         except Exception as e:
-            logger.error(f"Error collecting historical data: {str(e)}")
+            logger.error(f"Error in collect_historical_data: {str(e)}")
             return pd.DataFrame()
     
     # These methods are no longer needed as we're using DataManager directly
@@ -372,7 +398,7 @@ class BaseStockDataCollector(ABC):
                     self.news_cache[symbol] = sentiment_data
                     
                     # Save to cache file
-                    self.data_manager.save_sentiment_data(self.news_cache)
+                    self.db_manager.save_sentiment_data(self.news_cache)
                     
                     return sentiment_data
             
@@ -405,42 +431,44 @@ class BaseStockDataCollector(ABC):
 
 class UKStockDataCollector(BaseStockDataCollector):
     def _fetch_market_data(self):
-        """Fetch both symbols and company names for FTSE stocks"""
+        """Fetch FTSE 100 symbols and company names"""
         try:
-            ftse_url = "https://en.wikipedia.org/wiki/FTSE_100_Index"
-            response = requests.get(ftse_url)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            tables = soup.find_all('table', {'id': 'constituents'})
+            # FTSE 100 symbols
+            ftse100_symbols = [
+                'AAF.L', 'AAL.L', 'ABF.L', 'ADM.L', 'AHT.L', 'ANTO.L', 'AUTO.L', 'AV.L', 'AZN.L',
+                'BA.L', 'BARC.L', 'BATS.L', 'BKG.L', 'BLND.L', 'BP.L', 'BRBY.L', 'BT-A.L',
+                'CCH.L', 'CNA.L', 'CPG.L', 'CRDA.L', 'DGE.L', 'EXPN.L', 'EZJ.L', 'FERG.L',
+                'FLTR.L', 'FRES.L', 'GSK.L', 'HIK.L', 'HLMA.L', 'HSBA.L', 'IAG.L', 'IHG.L',
+                'III.L', 'IMB.L', 'INF.L', 'ITRK.L', 'ITV.L', 'JD.L', 'KGF.L', 'LAND.L',
+                'LGEN.L', 'LLOY.L', 'LSE.L', 'MKS.L', 'MNDI.L', 'MRO.L', 'NG.L', 'NWG.L',
+                'NXT.L', 'OCDO.L', 'PHNX.L', 'PRU.L', 'PSN.L', 'PSON.L', 'RB.L', 'RDSA.L',
+                'RDSB.L', 'REL.L', 'RIO.L', 'RKT.L', 'RMV.L', 'RR.L', 'RSA.L', 'RTO.L',
+                'SBRY.L', 'SDR.L', 'SGE.L', 'SGRO.L', 'SHP.L', 'SKG.L', 'SMDS.L', 'SMIN.L',
+                'SMT.L', 'SN.L', 'SSE.L', 'STAN.L', 'STJ.L', 'SVT.L', 'TSCO.L', 'TUI.L',
+                'ULVR.L', 'UU.L', 'VOD.L', 'WPP.L', 'WTB.L'
+            ]
             
-            for table in tables:
-                rows = table.find_all('tr')
-                # Get headers to identify the ticker column
-                headers = [th.text.strip() for th in rows[0].find_all('th')]
-                ticker_col_idx = 1  # Default to second column (index 1)
-                
-                # Find the index of the 'Ticker' column if headers exist
-                if 'Ticker' in headers:
-                    ticker_col_idx = headers.index('Ticker')
-                
-                for row in rows[1:]:  # Skip header row
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) > ticker_col_idx:
-                        company_name = cells[0].text.strip()
-                        ticker = cells[ticker_col_idx].text.strip()
-                        
-                        # Format ticker for UK market (add .L suffix)
-                        if ticker and len(ticker) > 0:
-                            symbol_with_suffix = ticker + '.L'
-                            self.symbol_to_name_map[symbol_with_suffix] = company_name
+            # Initialize symbol to name mapping
+            self.symbol_to_name_map = {}
             
-            # Ensure we have symbols
-            if not self.symbol_to_name_map:
-                raise ValueError("No valid FTSE symbols could be extracted from the webpage")
-                
+            # Get company names using yfinance
+            for symbol in ftse100_symbols:
+                try:
+                    stock = yf.Ticker(symbol)
+                    info = stock.info
+                    company_name = info.get('longName', symbol)
+                    self.symbol_to_name_map[symbol] = company_name
+                    time.sleep(0.1)  # Rate limiting
+                except Exception as e:
+                    logger.error(f"Error fetching company name for {symbol}: {str(e)}")
+                    self.symbol_to_name_map[symbol] = symbol
+            
             logger.info(f"Successfully extracted {len(self.symbol_to_name_map)} UK stock symbols")
-                
+            
         except Exception as e:
             logger.error(f"Error fetching UK market data: {str(e)}")
+            # Initialize with empty data if fetch fails
+            self.symbol_to_name_map = {}
 
 class USStockDataCollector(BaseStockDataCollector):
     def _fetch_market_data(self):

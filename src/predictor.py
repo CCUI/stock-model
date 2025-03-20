@@ -1,141 +1,158 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import numpy as np
-import pandas as pd
-from datetime import datetime
+import logging
+from .config import FEATURE_COLUMNS
+
+logger = logging.getLogger(__name__)
 
 class StockPredictor:
     def __init__(self):
-        # Import feature columns from config to ensure consistency
-        from .config import FEATURE_COLUMNS
         self.feature_cols = FEATURE_COLUMNS
     
-    def predict_top_gainers(self, model, features_df, top_n=5, market='UK'):
-        """Predict top gaining stocks for the next day"""
+    def predict_top_gainers(self, model, features_df, top_n=10, market='UK'):
+        """Predict top gaining stocks for tomorrow"""
         try:
-            # Filter stocks by market based on symbol pattern
-            if market.upper() == 'UK':
-                # UK stocks typically have .L suffix
-                market_stocks = features_df[features_df['Symbol'].str.endswith('.L')]
-            elif market.upper() == 'US':
-                # US stocks don't have .L suffix
-                market_stocks = features_df[~features_df['Symbol'].str.endswith('.L')]
-            else:
-                # If market not specified, use all stocks
-                market_stocks = features_df
-                
             # Get the latest data for each stock
-            latest_data = market_stocks.groupby('Symbol').last()
+            latest_data = features_df.groupby('Symbol').last()
             
-            # Create a list to store missing features
-            missing_features = []
+            # Ensure all required features are present
+            required_features = model.feature_names_in_
+            for feature in required_features:
+                if feature not in latest_data.columns:
+                    logger.warning(f"Missing feature {feature}, setting to 0")
+                    latest_data[feature] = 0.0
             
-            # Ensure all required features exist
-            for col in self.feature_cols:
-                if col not in latest_data.columns:
-                    missing_features.append(col)
-                    latest_data[col] = 0.0
-            
-            # Log warning if features are missing
-            if missing_features:
-                print(f"Warning: The following features are missing and were set to 0.0: {', '.join(missing_features)}")
-            
-            # Handle additional features in the data that aren't in the model
-            # This fixes the feature_names mismatch error
-            extra_features = [col for col in latest_data.columns if col not in self.feature_cols and col in ['social_sentiment', 'sector_sentiment', 'market_sentiment']]
-            if extra_features:
-                for col in extra_features:
-                    if col in latest_data.columns:
-                        # Instead of dropping these columns, keep them for the report
-                        # but don't include them in the prediction features
-                        pass
-            
-            # Prepare features for prediction
-            X = latest_data[self.feature_cols]
-            
-            # Validate data before prediction
-            if X.isnull().any().any():
-                raise ValueError("Features contain null values after preprocessing")
+            # Select only the features used by the model
+            X = latest_data[required_features]
             
             # Make predictions
             predictions = model.predict(X)
             
-            # Add predictions to the dataframe
-            latest_data['predicted_return'] = predictions
+            # Create DataFrame with predictions
+            results = pd.DataFrame({
+                'Symbol': X.index,
+                'Predicted_Return': predictions
+            })
             
             # Sort by predicted return and get top N
-            top_gainers = latest_data.sort_values('predicted_return', ascending=False).head(top_n)
+            top_gainers = results.nlargest(top_n, 'Predicted_Return')
+            
+            # Add company names if available
+            if 'CompanyName' in features_df.columns:
+                company_names = features_df.groupby('Symbol')['CompanyName'].first()
+                top_gainers = top_gainers.join(company_names)
             
             return top_gainers
+            
         except Exception as e:
-            error_msg = f"Error in predict_top_gainers: {str(e)}"
-            print(error_msg)
+            logger.error(f"Error in predict_top_gainers: {str(e)}")
             raise Exception(f"Failed to analyze stocks: {str(e)}")
     
     def generate_analysis_report(self, predictions, features_df):
         """Generate detailed analysis report for predicted top gainers in JSON format"""
-        report = []
-        
-        for symbol in predictions.index:
-            stock_data = features_df[features_df['Symbol'] == symbol].sort_index()
-            latest_data = stock_data.iloc[-1]
+        try:
+            if predictions is None or predictions.empty:
+                logger.warning("No predictions available to generate report")
+                return []
             
-            # Calculate additional metrics
-            momentum_score = self._calculate_momentum_score(stock_data)
-            trend_strength = self._calculate_trend_strength(stock_data)
-            risk_score = self._calculate_risk_score(stock_data)
+            report = []
             
-            # Calculate predicted price
-            current_price = latest_data['Close']
-            predicted_return = predictions.loc[symbol, 'predicted_return']
-            predicted_price = current_price * (1 + predicted_return)
+            for symbol in predictions.index:
+                try:
+                    # Get data for this symbol
+                    stock_data = features_df[features_df['Symbol'] == symbol]
+                    
+                    if stock_data.empty:
+                        logger.warning(f"No data found for symbol {symbol}")
+                        continue
+                    
+                    stock_data = stock_data.sort_index()
+                    latest_data = stock_data.iloc[-1]
+                    
+                    # Calculate additional metrics with error handling
+                    try:
+                        momentum_score = self._calculate_momentum_score(stock_data)
+                    except Exception as e:
+                        logger.error(f"Error calculating momentum score for {symbol}: {str(e)}")
+                        momentum_score = 5.0  # Default neutral score
+                    
+                    try:
+                        trend_strength = self._calculate_trend_strength(stock_data)
+                    except Exception as e:
+                        logger.error(f"Error calculating trend strength for {symbol}: {str(e)}")
+                        trend_strength = 5.0  # Default neutral score
+                    
+                    try:
+                        risk_score = self._calculate_risk_score(stock_data)
+                    except Exception as e:
+                        logger.error(f"Error calculating risk score for {symbol}: {str(e)}")
+                        risk_score = 5.0  # Default neutral score
+                    
+                    # Get current price and predicted return with error handling
+                    try:
+                        current_price = latest_data.get('Close', 0)
+                        predicted_return = predictions.loc[symbol, 'Predicted_Return']
+                        predicted_price = current_price * (1 + predicted_return)
+                    except Exception as e:
+                        logger.error(f"Error calculating price predictions for {symbol}: {str(e)}")
+                        current_price = 0
+                        predicted_price = 0
+                        predicted_return = 0
+                    
+                    # Create JSON structure for each stock with safe value access
+                    stock_report = {
+                        'symbol': symbol,
+                        'company_name': stock_data['CompanyName'].iloc[0] if 'CompanyName' in stock_data.columns else 'Unknown',
+                        'overview': {
+                            'current_price': float(round(current_price, 2)),
+                            'predicted_price': float(round(predicted_price, 2)),
+                            'predicted_return_percent': float(round(predicted_return * 100, 2))
+                        },
+                        'technical_analysis': {
+                            'rsi': {
+                                'value': float(round(latest_data.get('RSI', 50), 2)),
+                                'signal': self._get_rsi_signal(latest_data.get('RSI', 50))
+                            },
+                            'macd': {
+                                'value': float(round(latest_data.get('MACD', 0), 2)),
+                                'signal': 'Bullish' if latest_data.get('MACD', 0) > 0 else 'Bearish'
+                            },
+                            'momentum_score': float(round(momentum_score, 2)),
+                            'trend_strength': float(round(trend_strength, 2)),
+                            'stochastic_k': float(round(latest_data.get('Stochastic_K', 50), 2)),
+                            'stochastic_d': float(round(latest_data.get('Stochastic_D', 50), 2)),
+                            'williams_r': float(round(latest_data.get('Williams_R', -50), 2)),
+                            'cmf': float(round(latest_data.get('CMF', 0), 2))
+                        },
+                        'fundamental_analysis': {
+                            'market_cap_millions': float(round(latest_data.get('marketCap', 0)/1e6, 2)),
+                            'pe_ratio': float(round(latest_data.get('trailingPE', 0), 2)),
+                            'price_to_book': float(round(latest_data.get('priceToBook', 0), 2)),
+                            'debt_to_equity': float(round(latest_data.get('debtToEquity', 0), 2))
+                        },
+                        'market_sentiment': {
+                            'news_sentiment_score': float(round(latest_data.get('news_sentiment', 0), 2)),
+                            'volatility_risk_score': float(round(risk_score, 2))
+                        },
+                        'recent_performance': {
+                            'return_1d': float(round(latest_data.get('Returns', 0) * 100, 2)),
+                            'return_5d': float(round(latest_data.get('Returns_5d', 0) * 100, 2)),
+                            'return_20d': float(round(latest_data.get('Returns_20d', 0) * 100, 2))
+                        }
+                    }
+                    
+                    report.append(stock_report)
+                    
+                except Exception as e:
+                    logger.error(f"Error generating report for {symbol}: {str(e)}")
+                    continue
             
-            # Create JSON structure for each stock
-            stock_report = {
-                'symbol': symbol,
-                'company_name': stock_data['CompanyName'].iloc[0] if 'CompanyName' in stock_data.columns else 'Unknown',
-                'overview': {
-                    'current_price': float(round(current_price, 2)),
-                    'predicted_price': float(round(predicted_price, 2)),
-                    'predicted_return_percent': float(round(predicted_return * 100, 2))
-                },
-                'technical_analysis': {
-                    'rsi': {
-                        'value': float(round(latest_data['RSI'], 2)),
-                        'signal': 'Oversold' if latest_data['RSI'] < 30 else 'Overbought' if latest_data['RSI'] > 70 else 'Neutral'
-                    },
-                    'macd': {
-                        'value': float(round(latest_data['MACD'], 2)),
-                        'signal': 'Bullish' if latest_data['MACD'] > 0 else 'Bearish'
-                    },
-                    'momentum_score': float(round(momentum_score, 2)),
-                    'trend_strength': float(round(trend_strength, 2)),
-                    'stochastic_k': float(round(latest_data['Stochastic_K'], 2)),
-                    'stochastic_d': float(round(latest_data['Stochastic_D'], 2)),
-                    'williams_r': float(round(latest_data['Williams_R'], 2)),
-                    'cmf': float(round(latest_data['CMF'], 2))
-                },
-                'fundamental_analysis': {
-                    'market_cap_millions': float(round(latest_data['marketCap']/1e6, 2)),
-                    'pe_ratio': float(round(latest_data['trailingPE'], 2)),
-                    'price_to_book': float(round(latest_data['priceToBook'], 2)),
-                    'debt_to_equity': float(round(latest_data['debtToEquity'], 2))
-                },
-                'market_sentiment': {
-                    'news_sentiment_score': float(round(latest_data['news_sentiment'], 2)),
-                    'volatility_risk_score': float(round(risk_score, 2))
-                },
-                'recent_performance': {
-                    'return_1d': float(round(latest_data['Returns'] * 100, 2)),
-                    'return_5d': float(round(latest_data['Returns_5d'] * 100, 2)),
-                    'return_20d': float(round(latest_data['Returns_20d'] * 100, 2))
-                }
-            }
+            return report
             
-            report.append(stock_report)
-        
-        return report
+        except Exception as e:
+            logger.error(f"Error generating analysis report: {str(e)}")
+            return []
     
     def _calculate_momentum_score(self, stock_data):
         """Calculate momentum score based on multiple indicators"""
@@ -214,36 +231,68 @@ class StockPredictor:
             return 5.0  # Return neutral score on error
     
     def explain_prediction(self, model, features_df, symbol):
-        """Explain prediction for a specific stock"""
-        # Get features for the symbol
-        symbol_features = features_df[features_df['Symbol'] == symbol].iloc[-1]
-        
-        # Get feature values
-        X = symbol_features[self.feature_cols].values.reshape(1, -1)
-        
-        # Make prediction
-        prediction = model.predict(X)[0]
-        
-        # Calculate SHAP values
-        explainer = shap.Explainer(model)
-        shap_values = explainer(X)
-        
-        # Get feature importance
-        feature_importance = pd.DataFrame({
-            'feature': self.feature_cols,
-            'importance': np.abs(shap_values.values[0]),
-            'effect': shap_values.values[0]
-        }).sort_values('importance', ascending=False)
-        
-        # Determine top factors
-        positive_factors = feature_importance[feature_importance['effect'] > 0].head(3)
-        negative_factors = feature_importance[feature_importance['effect'] < 0].head(3)
-        
-        explanation = {
-            'symbol': symbol,
-            'prediction': prediction,
-            'positive_factors': positive_factors.to_dict('records'),
-            'negative_factors': negative_factors.to_dict('records')
-        }
-        
-        return explanation
+        """Explain prediction for a specific stock using feature importance"""
+        try:
+            # Get features for the symbol
+            symbol_data = features_df[features_df['Symbol'] == symbol]
+            if symbol_data.empty:
+                logger.error(f"No data found for symbol {symbol}")
+                return None
+                
+            symbol_features = symbol_data.iloc[-1]
+            
+            # Get feature values
+            feature_cols = [col for col in self.feature_cols if col in symbol_features.index]
+            X = symbol_features[feature_cols].values.reshape(1, -1)
+            
+            # Make prediction
+            prediction = model.predict(X)[0]
+            
+            # Get feature importance from the model
+            if hasattr(model, 'feature_importances_'):
+                importances = model.feature_importances_
+            else:
+                logger.warning("Model does not have feature importances")
+                return {
+                    'symbol': symbol,
+                    'prediction': prediction,
+                    'factors': []
+                }
+            
+            # Create feature importance DataFrame
+            importance_df = pd.DataFrame({
+                'feature': feature_cols,
+                'importance': importances,
+                'value': X[0]
+            })
+            
+            # Sort by absolute importance
+            importance_df['abs_importance'] = abs(importance_df['importance'])
+            importance_df = importance_df.sort_values('abs_importance', ascending=False)
+            
+            # Get top contributing factors
+            top_factors = importance_df.head(5).to_dict('records')
+            
+            explanation = {
+                'symbol': symbol,
+                'prediction': float(prediction),
+                'factors': top_factors
+            }
+            
+            return explanation
+            
+        except Exception as e:
+            logger.error(f"Error explaining prediction for {symbol}: {str(e)}")
+            return None
+
+    def _get_rsi_signal(self, rsi_value):
+        """Get RSI signal with error handling"""
+        try:
+            if rsi_value < 30:
+                return 'Oversold'
+            elif rsi_value > 70:
+                return 'Overbought'
+            else:
+                return 'Neutral'
+        except Exception:
+            return 'Neutral'
