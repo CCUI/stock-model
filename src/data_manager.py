@@ -24,10 +24,22 @@ class DataManager:
         self.max_chunks_in_memory = 4  # Limit concurrent chunks in memory
         
     def save_historical_data(self, data_dict):
-        """Save historical data in chunks"""
+        """Save historical data in chunks, but only if the existing data is older than 1 day"""
         try:
             # Create directory if it doesn't exist
             self.market_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Check if historical cache exists and is recent (less than 1 day old)
+            if self.historical_cache_file.exists():
+                cache_mtime = datetime.fromtimestamp(self.historical_cache_file.stat().st_mtime)
+                current_time = datetime.now()
+                
+                # If cache is less than 1 day old, don't update unless it's missing data
+                if (current_time - cache_mtime).days < 1:
+                    logger.info(f"Historical data cache is less than 1 day old. Skipping update.")
+                    return
+                else:
+                    logger.info(f"Historical data cache is older than 1 day. Updating...")
             
             # Split data into chunks
             chunks = {}

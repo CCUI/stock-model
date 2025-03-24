@@ -91,6 +91,12 @@ class StockPredictor:
             predicted_return = predictions.loc[symbol, 'predicted_return']
             predicted_price = current_price * (1 + predicted_return)
             
+            # Ensure sentiment data exists
+            news_sentiment = float(round(latest_data.get('news_sentiment', 0.0), 2))
+            social_sentiment = float(round(latest_data.get('social_sentiment', 0.0), 2))
+            sector_sentiment = float(round(latest_data.get('sector_sentiment', 0.0), 2))
+            market_sentiment = float(round(latest_data.get('market_sentiment', 0.0), 2))
+            
             # Create JSON structure for each stock
             stock_report = {
                 'symbol': symbol,
@@ -123,7 +129,10 @@ class StockPredictor:
                     'debt_to_equity': float(round(latest_data['debtToEquity'], 2))
                 },
                 'market_sentiment': {
-                    'news_sentiment_score': float(round(latest_data['news_sentiment'], 2)),
+                    'news_sentiment_score': news_sentiment,
+                    'social_sentiment_score': social_sentiment,
+                    'sector_sentiment_score': sector_sentiment,
+                    'market_sentiment_score': market_sentiment,
                     'volatility_risk_score': float(round(risk_score, 2))
                 },
                 'recent_performance': {
@@ -193,21 +202,48 @@ class StockPredictor:
     def _calculate_risk_score(self, stock_data):
         """Calculate risk score based on volatility and price stability"""
         try:
+            # Ensure we have at least a week of data
+            if len(stock_data) < 5:
+                return 5.0  # Return neutral score for insufficient data
+                
             latest = stock_data.iloc[-1]
             
-            # Normalize volatility measures
-            vol_5d_score = 10 - (latest['Volatility_5d'] * 100)  # Lower volatility = better score
-            vol_20d_score = 10 - (latest['Volatility_20d'] * 100)
+            # Get volatility metrics - make sure we don't have NaN or zero values
+            vol_5d = latest.get('Volatility_5d', 0.01)
+            vol_5d = max(0.0001, vol_5d)  # Ensure value is positive
+            
+            vol_20d = latest.get('Volatility_20d', 0.01)
+            vol_20d = max(0.0001, vol_20d)  # Ensure value is positive
+            
+            # Calculate volatility scores on a logarithmic scale to better differentiate
+            # Higher volatility = higher risk score
+            vol_5d_score = min(10, max(1, 5 + 5 * (vol_5d / 0.02)))  # Scale around typical volatility of 2%
+            vol_20d_score = min(10, max(1, 5 + 5 * (vol_20d / 0.04)))  # Scale around typical volatility of 4%
             
             # Consider price stability relative to Bollinger Bands if available
             bb_score = 5.0  # Default neutral score
-            if all(col in latest.index for col in ['BB_UPPER', 'BB_LOWER', 'BB_MIDDLE']):
-                bb_position = (latest['Close'] - latest['BB_LOWER']) / (latest['BB_UPPER'] - latest['BB_LOWER'])
-                bb_score = 10 - abs(bb_position - 0.5) * 20  # Center position = better score
+            if all(key in latest for key in ['BB_UPPER', 'BB_LOWER', 'BB_MIDDLE', 'Close']):
+                try:
+                    bb_width = (latest['BB_UPPER'] - latest['BB_LOWER']) / latest['BB_MIDDLE']
+                    bb_width_score = min(10, max(1, 5 * bb_width * 10))  # Wider bands = higher risk
+                    
+                    bb_position = (latest['Close'] - latest['BB_LOWER']) / (latest['BB_UPPER'] - latest['BB_LOWER'])
+                    position_score = min(10, max(1, 10 * abs(bb_position - 0.5) * 2))  # Extreme positions = higher risk
+                    
+                    bb_score = (bb_width_score * 0.5 + position_score * 0.5)
+                except:
+                    bb_score = 5.0
+            
+            # Recent price activity - sharp changes indicate higher risk
+            price_change_score = 5.0
+            if 'Returns' in latest and 'Returns_5d' in latest:
+                recent_change = abs(latest['Returns'] * 100)  # Convert to percentage
+                weekly_change = abs(latest['Returns_5d'] * 100)  # Convert to percentage
+                price_change_score = min(10, max(1, (recent_change + weekly_change)))
             
             # Combine scores
-            risk_score = (vol_5d_score * 0.4 + vol_20d_score * 0.4 + bb_score * 0.2)
-            return max(0, min(10, risk_score))  # Scale to 0-10
+            risk_score = (vol_5d_score * 0.3 + vol_20d_score * 0.3 + bb_score * 0.2 + price_change_score * 0.2)
+            return round(max(1, min(10, risk_score)), 1)  # Scale to 1-10 and round to 1 decimal place
             
         except Exception as e:
             print(f"Error calculating risk score: {str(e)}")
@@ -215,35 +251,80 @@ class StockPredictor:
     
     def explain_prediction(self, model, features_df, symbol):
         """Explain prediction for a specific stock"""
-        # Get features for the symbol
-        symbol_features = features_df[features_df['Symbol'] == symbol].iloc[-1]
-        
-        # Get feature values
-        X = symbol_features[self.feature_cols].values.reshape(1, -1)
-        
-        # Make prediction
-        prediction = model.predict(X)[0]
-        
-        # Calculate SHAP values
-        explainer = shap.Explainer(model)
-        shap_values = explainer(X)
-        
-        # Get feature importance
-        feature_importance = pd.DataFrame({
-            'feature': self.feature_cols,
-            'importance': np.abs(shap_values.values[0]),
-            'effect': shap_values.values[0]
-        }).sort_values('importance', ascending=False)
-        
-        # Determine top factors
-        positive_factors = feature_importance[feature_importance['effect'] > 0].head(3)
-        negative_factors = feature_importance[feature_importance['effect'] < 0].head(3)
-        
-        explanation = {
-            'symbol': symbol,
-            'prediction': prediction,
-            'positive_factors': positive_factors.to_dict('records'),
-            'negative_factors': negative_factors.to_dict('records')
-        }
-        
-        return explanation
+        try:
+            # Get features for the symbol
+            symbol_features = features_df[features_df['Symbol'] == symbol].iloc[-1]
+            
+            # Get feature values
+            feature_values = {}
+            for feature in self.feature_cols:
+                if feature in symbol_features:
+                    feature_values[feature] = float(symbol_features[feature])
+                else:
+                    feature_values[feature] = 0.0
+            
+            X = pd.DataFrame([feature_values])
+            
+            # Make prediction
+            prediction = model.predict(X)[0]
+            
+            # Get feature importance
+            try:
+                # For tree-based models like XGBoost
+                if hasattr(model, 'feature_importances_'):
+                    importances = model.feature_importances_
+                    
+                    # Calculate the effect direction
+                    effect = []
+                    for i, feature_name in enumerate(self.feature_cols):
+                        # Get feature value and determine if it's above average
+                        if feature_name in X:
+                            feature_val = X[feature_name].iloc[0]
+                            # If feature value is high (above average), it contributes in direction of importance
+                            # If feature value is low (below average), it contributes opposite of importance
+                            effect.append(importances[i] * (1 if feature_val > 0 else -1))
+                        else:
+                            effect.append(0)
+                    
+                    # Create a dataframe with features and importance values
+                    feature_importance = pd.DataFrame({
+                        'feature': self.feature_cols,
+                        'importance': importances,
+                        'effect': effect
+                    }).sort_values('importance', ascending=False)
+                    
+                    # Determine top factors
+                    positive_factors = feature_importance[feature_importance['effect'] > 0].head(3)
+                    negative_factors = feature_importance[feature_importance['effect'] < 0].head(3)
+                    
+                    explanation = {
+                        'symbol': symbol,
+                        'prediction': float(prediction),
+                        'positive_factors': positive_factors[['feature', 'importance']].to_dict('records'),
+                        'negative_factors': negative_factors[['feature', 'importance']].to_dict('records')
+                    }
+                    
+                    return explanation
+                else:
+                    # For other models, return basic prediction without explanation
+                    return {
+                        'symbol': symbol,
+                        'prediction': float(prediction),
+                        'note': 'Feature importance not available for this model type'
+                    }
+            except Exception as e:
+                # Fallback to just prediction if feature importance fails
+                print(f"Error getting feature importance: {str(e)}")
+                return {
+                    'symbol': symbol,
+                    'prediction': float(prediction),
+                    'note': f'Could not generate explanation: {str(e)}'
+                }
+                
+        except Exception as e:
+            print(f"Error explaining prediction: {str(e)}")
+            return {
+                'symbol': symbol,
+                'prediction': None,
+                'error': str(e)
+            }
