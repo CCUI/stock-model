@@ -142,45 +142,41 @@ class BaseStockDataCollector(ABC):
             # Check if we need to update sentiment data
             if self.include_news_sentiment:
                 try:
-                    # Load last update information
+                    # Load last update information for logging
                     last_update = {}
                     if self.last_sentiment_update_file.exists():
                         with open(self.last_sentiment_update_file, 'r') as f:
                             last_update = json.load(f)
                     
-                    # Check if we need to update sentiment (update daily)
-                    last_update_time = datetime.fromisoformat(last_update.get('last_update', '2000-01-01'))
+                    # Current time for updates
                     current_time = datetime.now()
+                    logger.info(f"Checking sentiment data... Current time: {current_time.isoformat()}")
                     
-                    # Force update if last update was more than 1 day ago
-                    if (current_time - last_update_time).days >= 1:
-                        logger.info("Updating sentiment data...")
-                        # Get next batch of stocks that need sentiment updates
-                        symbols_to_update = self._get_next_sentiment_batch()
-                        
-                        if not symbols_to_update:
-                            logger.info("No symbols need sentiment updates")
-                        else:
-                            # Update sentiment for each symbol
-                            for symbol in symbols_to_update:
-                                try:
-                                    sentiment_data = self._get_news_sentiment(symbol)
-                                    self.news_cache[symbol] = sentiment_data
-                                    # Save after each update to prevent data loss
-                                    self.data_manager.save_sentiment_data(self.news_cache)
-                                    time.sleep(self.api_call_delay)  # Respect rate limits
-                                    logger.info(f"Updated sentiment for {symbol}")
-                                except Exception as e:
-                                    logger.error(f"Error updating sentiment for {symbol}: {str(e)}")
-                            
-                            # Update last update time
-                            last_update['last_update'] = current_time.isoformat()
-                            with open(self.last_sentiment_update_file, 'w') as f:
-                                json.dump(last_update, f)
-                            
-                            logger.info("Sentiment data update completed")
+                    # Always check for outdated sentiment data using _get_next_sentiment_batch
+                    symbols_to_update = self._get_next_sentiment_batch()
+                    
+                    if not symbols_to_update:
+                        logger.info("No symbols need sentiment updates")
                     else:
-                        logger.info("Sentiment data is up to date")
+                        logger.info(f"Updating sentiment data for {len(symbols_to_update)} symbols...")
+                        # Update sentiment for each symbol
+                        for symbol in symbols_to_update:
+                            try:
+                                sentiment_data = self._get_news_sentiment(symbol)
+                                self.news_cache[symbol] = sentiment_data
+                                # Save after each update to prevent data loss
+                                self.data_manager.save_sentiment_data(self.news_cache)
+                                time.sleep(self.api_call_delay)  # Respect rate limits
+                                logger.info(f"Updated sentiment for {symbol}")
+                            except Exception as e:
+                                logger.error(f"Error updating sentiment for {symbol}: {str(e)}")
+                        
+                        # Update last update time
+                        last_update['last_update'] = current_time.isoformat()
+                        with open(self.last_sentiment_update_file, 'w') as f:
+                            json.dump(last_update, f)
+                        
+                        logger.info("Sentiment data update completed")
                 except Exception as e:
                     logger.error(f"Error updating sentiment data: {str(e)}")
             
@@ -273,23 +269,17 @@ class BaseStockDataCollector(ABC):
     def _get_next_sentiment_batch(self) -> list:
         """Get the next batch of stocks that need sentiment updates"""
         try:
-            # Load last update information
-            last_update = {}
-            if self.last_sentiment_update_file.exists():
-                with open(self.last_sentiment_update_file, 'r') as f:
-                    last_update = json.load(f)
-            
             # Get all stocks sorted by update time
             stock_updates = []
             for symbol in self.symbols:
                 company_name = self._get_company_name(symbol)
                 last_update_time = None
                 
-                if company_name in self.news_cache:
-                    cached_data = self.news_cache[company_name]
+                if symbol in self.news_cache:
+                    cached_data = self.news_cache[symbol]
                     if 'timestamp' in cached_data:
                         try:
-                            last_update_time = datetime.fromisoformat(str(cached_data['timestamp'].iloc[0]))
+                            last_update_time = datetime.fromisoformat(str(cached_data['timestamp']))
                         except (ValueError, AttributeError):
                             pass
                 
@@ -322,16 +312,28 @@ class BaseStockDataCollector(ABC):
     def _get_news_sentiment(self, symbol):
         """Get news sentiment using TextBlob"""
         try:
+            # Check if we already have sentiment data that's recent (less than 1 day old)
+            current_time = datetime.now()
+            
             if symbol in self.news_cache:
-                return self.news_cache[symbol]
+                cached_data = self.news_cache[symbol]
+                if 'timestamp' in cached_data:
+                    try:
+                        last_update = datetime.fromisoformat(cached_data['timestamp'])
+                        # If the sentiment data is less than 1 day old, return it
+                        if (current_time - last_update).days < 1:
+                            return cached_data
+                    except (ValueError, AttributeError):
+                        # Invalid timestamp, will fetch new data
+                        pass
             
             # Get company name for better news search
             company_name = self._get_company_name(symbol)
             
             # Ensure we respect rate limits
-            current_time = time.time()
-            if current_time - self.last_api_call < self.api_call_delay:
-                time.sleep(self.api_call_delay - (current_time - self.last_api_call))
+            current_time_seconds = time.time()
+            if current_time_seconds - self.last_api_call < self.api_call_delay:
+                time.sleep(self.api_call_delay - (current_time_seconds - self.last_api_call))
             
             # Search for news articles
             url = f"https://newsapi.org/v2/everything"
@@ -364,23 +366,30 @@ class BaseStockDataCollector(ABC):
                     # Calculate weighted average sentiment
                     avg_sentiment = sum(sentiments) / len(sentiments)
                     
-                    # Store in cache
+                    # Store in cache with current timestamp
                     sentiment_data = {
                         'sentiment': avg_sentiment,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': current_time.isoformat()
                     }
                     self.news_cache[symbol] = sentiment_data
                     
                     # Save to cache file
                     self.data_manager.save_sentiment_data(self.news_cache)
                     
+                    logger.info(f"Updated sentiment for {symbol}: {avg_sentiment:.4f}")
                     return sentiment_data
             
-            return {'sentiment': 0, 'timestamp': datetime.now().isoformat()}
+            # If we get here, either the API call failed or no articles were found
+            # Return default sentiment with current timestamp
+            sentiment_data = {'sentiment': 0, 'timestamp': current_time.isoformat()}
+            self.news_cache[symbol] = sentiment_data
+            return sentiment_data
             
         except Exception as e:
             logger.error(f"Error getting news sentiment for {symbol}: {str(e)}")
-            return {'sentiment': 0, 'timestamp': datetime.now().isoformat()}
+            # Return default sentiment with current timestamp
+            current_time = datetime.now()
+            return {'sentiment': 0, 'timestamp': current_time.isoformat()}
 
     def _detect_anomalies(self, df):
         """Detect and handle anomalies in the data"""

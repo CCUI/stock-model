@@ -190,6 +190,35 @@ class DataManager:
         
         return updated_data
 
+    def refresh_cache(self):
+        """Delete all cache files to force fresh data collection"""
+        try:
+            # Delete the SQLite database
+            db_path = self.market_dir / f'{self.market.lower()}_market.db'
+            if db_path.exists():
+                db_path.unlink()
+                logger.info(f"Deleted SQLite database: {db_path}")
+
+            # Delete the sentiment last update file
+            last_sentiment_update_file = self.market_dir / 'last_sentiment_update.json'
+            if last_sentiment_update_file.exists():
+                last_sentiment_update_file.unlink()
+                logger.info(f"Deleted sentiment update file: {last_sentiment_update_file}")
+            
+            # Delete sentiment cache file
+            if self.sentiment_cache_file.exists():
+                self.sentiment_cache_file.unlink()
+                logger.info(f"Deleted sentiment cache file: {self.sentiment_cache_file}")
+                
+            # Recreate database
+            self.db_manager = DatabaseManager(market=self.market)
+            
+            logger.info("Cache refreshed. Fresh data will be collected on next run.")
+            
+        except Exception as e:
+            logger.error(f"Error refreshing cache: {str(e)}")
+            raise
+
 class DatabaseManager:
     def __init__(self, market='UK'):
         self.market = market.upper()
