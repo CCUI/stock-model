@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import logging
+import argparse
 from datetime import datetime, timedelta
 
 # Setup logging
@@ -295,20 +296,39 @@ class PredictionEvaluator:
             return None
 
 def main():
-    # Create evaluator
-    evaluator = PredictionEvaluator(market='UK')
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Evaluate stock predictions against actual market data')
+    parser.add_argument('--market', type=str, default='UK', choices=['UK', 'US'], 
+                        help='Market to evaluate (UK or US)')
+    parser.add_argument('--date', type=str, default=None, 
+                        help='Evaluation date in YYYY-MM-DD format. If not provided, uses today\'s date')
+    args = parser.parse_args()
     
-    # Get today's date
-    today = datetime.now().strftime('%Y-%m-%d')
+    # Validate date format if provided
+    evaluation_date = args.date
+    if evaluation_date:
+        try:
+            datetime.strptime(evaluation_date, '%Y-%m-%d')
+        except ValueError:
+            print("Error: Date must be in YYYY-MM-DD format")
+            return
+    else:
+        # Get today's date if not provided
+        evaluation_date = datetime.now().strftime('%Y-%m-%d')
     
-    # Evaluate the most recent prediction against today's data
-    results = evaluator.evaluate_predictions(evaluation_date=today)
+    # Create evaluator with specified market
+    evaluator = PredictionEvaluator(market=args.market)
+    
+    print(f"Evaluating predictions for {args.market} market against data from {evaluation_date}")
+    
+    # Evaluate the most recent prediction against the specified date
+    results = evaluator.evaluate_predictions(evaluation_date=evaluation_date)
     
     if results:
         print(json.dumps(results, indent=2))
     else:
         print("Evaluation failed. Check logs for details.")
-        print("Note: Make sure you have a prediction from a previous day and actual market data for today.")
+        print("Note: Make sure you have a prediction from a previous day and actual market data for the specified date.")
 
 if __name__ == "__main__":
     main()
