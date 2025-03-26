@@ -1,0 +1,439 @@
+[
+  {
+    "date": "2025-03-26",
+    "timestamp": "2025-03-26T22:43:30.478742",
+    "market": "US",
+    "report": [
+      {
+        "symbol": "FSLR",
+        "company_name": "First Solar",
+        "overview": {
+          "current_price": 126.34,
+          "predicted_price": 127.18,
+          "predicted_return_percent": 0.6600000262260437
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 45.09,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -7.12,
+            "signal": "Bearish"
+          },
+          "momentum_score": 3.52,
+          "trend_strength": 0.0,
+          "stochastic_k": 11.0,
+          "stochastic_d": 23.13,
+          "williams_r": -89.0,
+          "cmf": -1.53
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 10.51,
+          "price_to_book": 1.7,
+          "debt_to_equity": 9.01
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.28,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 9.4
+        },
+        "recent_performance": {
+          "return_1d": -204.51,
+          "return_5d": -58.16,
+          "return_20d": -254.5
+        }
+      },
+      {
+        "symbol": "NKE",
+        "company_name": "Nike, Inc.",
+        "overview": {
+          "current_price": 65.74,
+          "predicted_price": 66.13,
+          "predicted_return_percent": 0.5899999737739563
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 16.4,
+            "signal": "Oversold"
+          },
+          "macd": {
+            "value": -2.27,
+            "signal": "Bearish"
+          },
+          "momentum_score": 0.0,
+          "trend_strength": 0.0,
+          "stochastic_k": 5.18,
+          "stochastic_d": 9.7,
+          "williams_r": -94.82,
+          "cmf": -0.42
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.1,
+          "pe_ratio": 21.84,
+          "price_to_book": 6.94,
+          "debt_to_equity": 85.04
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.03,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 8.4
+        },
+        "recent_performance": {
+          "return_1d": -64.35,
+          "return_5d": -235.74,
+          "return_20d": -243.9
+        }
+      },
+      {
+        "symbol": "MTD",
+        "company_name": "Mettler Toledo",
+        "overview": {
+          "current_price": 1191.03,
+          "predicted_price": 1197.58,
+          "predicted_return_percent": 0.550000011920929
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 32.46,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -25.07,
+            "signal": "Bearish"
+          },
+          "momentum_score": 1.08,
+          "trend_strength": 0.0,
+          "stochastic_k": 10.14,
+          "stochastic_d": 16.39,
+          "williams_r": -89.86,
+          "cmf": -0.2
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.02,
+          "pe_ratio": 29.4,
+          "price_to_book": -196.64,
+          "debt_to_equity": 0.0
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.08,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 6.2
+        },
+        "recent_performance": {
+          "return_1d": -19.49,
+          "return_5d": -60.26,
+          "return_20d": -106.64
+        }
+      },
+      {
+        "symbol": "VTRS",
+        "company_name": "Viatris",
+        "overview": {
+          "current_price": 8.96,
+          "predicted_price": 9.01,
+          "predicted_return_percent": 0.5299999713897705
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 39.95,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -0.37,
+            "signal": "Bearish"
+          },
+          "momentum_score": 1.17,
+          "trend_strength": 0.0,
+          "stochastic_k": 7.23,
+          "stochastic_d": 18.2,
+          "williams_r": -92.77,
+          "cmf": -1.01
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 0.0,
+          "price_to_book": 0.57,
+          "debt_to_equity": 76.77
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.04,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 9.2
+        },
+        "recent_performance": {
+          "return_1d": 4.06,
+          "return_5d": -117.96,
+          "return_20d": -252.43
+        }
+      },
+      {
+        "symbol": "DELL",
+        "company_name": "Dell Technologies",
+        "overview": {
+          "current_price": 96.26,
+          "predicted_price": 96.75,
+          "predicted_return_percent": 0.5099999904632568
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 56.45,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -2.44,
+            "signal": "Bearish"
+          },
+          "momentum_score": 3.93,
+          "trend_strength": 0.0,
+          "stochastic_k": 60.12,
+          "stochastic_d": 75.66,
+          "williams_r": -39.88,
+          "cmf": -1.19
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.07,
+          "pe_ratio": 15.09,
+          "price_to_book": -45.6,
+          "debt_to_equity": 0.0
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": 0.16,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 9.0
+        },
+        "recent_performance": {
+          "return_1d": -138.67,
+          "return_5d": -62.18,
+          "return_20d": -220.94
+        }
+      },
+      {
+        "symbol": "WDC",
+        "company_name": "Western Digital",
+        "overview": {
+          "current_price": 42.62,
+          "predicted_price": 42.83,
+          "predicted_return_percent": 0.5
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 54.86,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -1.29,
+            "signal": "Bearish"
+          },
+          "momentum_score": 3.16,
+          "trend_strength": 0.0,
+          "stochastic_k": 52.37,
+          "stochastic_d": 65.79,
+          "williams_r": -47.63,
+          "cmf": -1.03
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 12.32,
+          "price_to_book": 1.22,
+          "debt_to_equity": 0.0
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": 0.07,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 7.8
+        },
+        "recent_performance": {
+          "return_1d": -94.14,
+          "return_5d": -122.5,
+          "return_20d": -199.22
+        }
+      },
+      {
+        "symbol": "WST",
+        "company_name": "West Pharmaceutical Services",
+        "overview": {
+          "current_price": 224.91,
+          "predicted_price": 225.99,
+          "predicted_return_percent": 0.47999998927116394
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 41.75,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -9.24,
+            "signal": "Bearish"
+          },
+          "momentum_score": 2.65,
+          "trend_strength": 0.0,
+          "stochastic_k": 27.07,
+          "stochastic_d": 43.3,
+          "williams_r": -72.93,
+          "cmf": 0.5
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.02,
+          "pe_ratio": 33.67,
+          "price_to_book": 6.06,
+          "debt_to_equity": 11.38
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.15,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 8.0
+        },
+        "recent_performance": {
+          "return_1d": -22.28,
+          "return_5d": -59.53,
+          "return_20d": 18.51
+        }
+      },
+      {
+        "symbol": "TRMB",
+        "company_name": "Trimble Inc.",
+        "overview": {
+          "current_price": 68.94,
+          "predicted_price": 69.23,
+          "predicted_return_percent": 0.4099999964237213
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 53.81,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -0.41,
+            "signal": "Bearish"
+          },
+          "momentum_score": 3.95,
+          "trend_strength": 0.0,
+          "stochastic_k": 46.56,
+          "stochastic_d": 69.35,
+          "williams_r": -53.44,
+          "cmf": -0.57
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.02,
+          "pe_ratio": 11.32,
+          "price_to_book": 2.95,
+          "debt_to_equity": 26.35
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.04,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 8.6
+        },
+        "recent_performance": {
+          "return_1d": -115.51,
+          "return_5d": -91.96,
+          "return_20d": -53.98
+        }
+      },
+      {
+        "symbol": "F",
+        "company_name": "Ford Motor Company",
+        "overview": {
+          "current_price": 10.3,
+          "predicted_price": 10.34,
+          "predicted_return_percent": 0.4099999964237213
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 68.25,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": 0.2,
+            "signal": "Bullish"
+          },
+          "momentum_score": 8.81,
+          "trend_strength": 8.83,
+          "stochastic_k": 94.38,
+          "stochastic_d": 95.05,
+          "williams_r": -5.62,
+          "cmf": 0.41
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.04,
+          "pe_ratio": 7.05,
+          "price_to_book": 0.91,
+          "debt_to_equity": 358.6
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.08,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 7.9
+        },
+        "recent_performance": {
+          "return_1d": 3.3,
+          "return_5d": 25.77,
+          "return_20d": 98.74
+        }
+      },
+      {
+        "symbol": "CRM",
+        "company_name": "Salesforce",
+        "overview": {
+          "current_price": 280.99,
+          "predicted_price": 282.14,
+          "predicted_return_percent": 0.4099999964237213
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 46.22,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -8.21,
+            "signal": "Bearish"
+          },
+          "momentum_score": 3.19,
+          "trend_strength": 2.01,
+          "stochastic_k": 54.3,
+          "stochastic_d": 59.36,
+          "williams_r": -45.7,
+          "cmf": -0.25
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.27,
+          "pe_ratio": 44.25,
+          "price_to_book": 4.42,
+          "debt_to_equity": 19.73
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.13,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": 0.22,
+          "volatility_risk_score": 8.7
+        },
+        "recent_performance": {
+          "return_1d": -139.21,
+          "return_5d": 9.31,
+          "return_20d": -118.32
+        }
+      }
+    ]
+  }
+]

@@ -1,5 +1,442 @@
 [
   {
+    "date": "2025-03-26",
+    "timestamp": "2025-03-26T21:58:28.513142",
+    "market": "UK",
+    "report": [
+      {
+        "symbol": "CRDA.L",
+        "company_name": "Croda International",
+        "overview": {
+          "current_price": 2927.0,
+          "predicted_price": 3000.56,
+          "predicted_return_percent": 2.509999990463257
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 24.39,
+            "signal": "Oversold"
+          },
+          "macd": {
+            "value": -81.93,
+            "signal": "Bearish"
+          },
+          "momentum_score": 0.0,
+          "trend_strength": 0.0,
+          "stochastic_k": 17.63,
+          "stochastic_d": 8.23,
+          "williams_r": -82.37,
+          "cmf": -1.51
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.0,
+          "pe_ratio": 17.53,
+          "price_to_book": 179.01,
+          "debt_to_equity": 30.44
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.01,
+          "social_sentiment_score": 0.2,
+          "sector_sentiment_score": 0.01,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 5.3
+        },
+        "recent_performance": {
+          "return_1d": 0.0,
+          "return_5d": -3.7,
+          "return_20d": -7.79
+        }
+      },
+      {
+        "symbol": "KGF.L",
+        "company_name": "Kingfisher plc",
+        "overview": {
+          "current_price": 244.5,
+          "predicted_price": 247.46,
+          "predicted_return_percent": 1.2100000381469727
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 46.1,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": 2.49,
+            "signal": "Bullish"
+          },
+          "momentum_score": 5.68,
+          "trend_strength": 6.71,
+          "stochastic_k": 13.52,
+          "stochastic_d": 37.31,
+          "williams_r": -86.48,
+          "cmf": -0.63
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 24.45,
+          "price_to_book": 68.7,
+          "debt_to_equity": 37.01
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": 0.05,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 7.6
+        },
+        "recent_performance": {
+          "return_1d": 0.5,
+          "return_5d": -7.75,
+          "return_20d": -4.66
+        }
+      },
+      {
+        "symbol": "WPP.L",
+        "company_name": "WPP",
+        "overview": {
+          "current_price": 611.6,
+          "predicted_price": 616.58,
+          "predicted_return_percent": 0.8199999928474426
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 37.85,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -28.55,
+            "signal": "Bearish"
+          },
+          "momentum_score": 0.76,
+          "trend_strength": 0.0,
+          "stochastic_k": 0.0,
+          "stochastic_d": 12.23,
+          "williams_r": -100.0,
+          "cmf": -0.23
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 12.48,
+          "price_to_book": 189.88,
+          "debt_to_equity": 170.0
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.05,
+          "social_sentiment_score": 0.25,
+          "sector_sentiment_score": 0.03,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 5.0
+        },
+        "recent_performance": {
+          "return_1d": -1.89,
+          "return_5d": -2.79,
+          "return_20d": -11.36
+        }
+      },
+      {
+        "symbol": "UU.L",
+        "company_name": "United Utilities",
+        "overview": {
+          "current_price": 988.4,
+          "predicted_price": 993.89,
+          "predicted_return_percent": 0.5600000023841858
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 64.34,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -0.54,
+            "signal": "Bearish"
+          },
+          "momentum_score": 6.41,
+          "trend_strength": 0.0,
+          "stochastic_k": 79.01,
+          "stochastic_d": 65.88,
+          "williams_r": -20.99,
+          "cmf": 0.5
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 58.14,
+          "price_to_book": 347.66,
+          "debt_to_equity": 551.89
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.09,
+          "social_sentiment_score": -0.23,
+          "sector_sentiment_score": 0.04,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 4.0
+        },
+        "recent_performance": {
+          "return_1d": 0.14,
+          "return_5d": -0.8,
+          "return_20d": -2.53
+        }
+      },
+      {
+        "symbol": "VOD.L",
+        "company_name": "Vodafone Group",
+        "overview": {
+          "current_price": 72.5,
+          "predicted_price": 72.87,
+          "predicted_return_percent": 0.5099999904632568
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 57.48,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": 1.21,
+            "signal": "Bullish"
+          },
+          "momentum_score": 8.19,
+          "trend_strength": 10.0,
+          "stochastic_k": 45.78,
+          "stochastic_d": 44.58,
+          "williams_r": -54.22,
+          "cmf": 1.26
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.02,
+          "pe_ratio": 10.36,
+          "price_to_book": 32.48,
+          "debt_to_equity": 95.38
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.08,
+          "social_sentiment_score": 0.14,
+          "sector_sentiment_score": 0.04,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 4.6
+        },
+        "recent_performance": {
+          "return_1d": -0.65,
+          "return_5d": -3.74,
+          "return_20d": -1.2
+        }
+      },
+      {
+        "symbol": "RR.L",
+        "company_name": "Rolls-Royce Holdings",
+        "overview": {
+          "current_price": 801.6,
+          "predicted_price": 805.31,
+          "predicted_return_percent": 0.46000000834465027
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 49.25,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": 36.91,
+            "signal": "Bullish"
+          },
+          "momentum_score": 7.09,
+          "trend_strength": 10.0,
+          "stochastic_k": 83.33,
+          "stochastic_d": 79.47,
+          "williams_r": -16.67,
+          "cmf": -0.0
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.07,
+          "pe_ratio": 26.72,
+          "price_to_book": -7354.13,
+          "debt_to_equity": 0.0
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.14,
+          "social_sentiment_score": 0.15,
+          "sector_sentiment_score": 0.07,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 4.8
+        },
+        "recent_performance": {
+          "return_1d": -1.14,
+          "return_5d": -2.66,
+          "return_20d": 7.52
+        }
+      },
+      {
+        "symbol": "REL.L",
+        "company_name": "RELX",
+        "overview": {
+          "current_price": 3870.0,
+          "predicted_price": 3887.89,
+          "predicted_return_percent": 0.46000000834465027
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 74.4,
+            "signal": "Overbought"
+          },
+          "macd": {
+            "value": -6.28,
+            "signal": "Bearish"
+          },
+          "momentum_score": 8.27,
+          "trend_strength": 0.0,
+          "stochastic_k": 85.91,
+          "stochastic_d": 87.86,
+          "williams_r": -14.09,
+          "cmf": 0.92
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.07,
+          "pe_ratio": 37.57,
+          "price_to_book": 2062.9,
+          "debt_to_equity": 186.76
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.16,
+          "social_sentiment_score": -0.07,
+          "sector_sentiment_score": 0.08,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 4.4
+        },
+        "recent_performance": {
+          "return_1d": -1.45,
+          "return_5d": -0.51,
+          "return_20d": -2.52
+        }
+      },
+      {
+        "symbol": "NXT.L",
+        "company_name": "Next plc",
+        "overview": {
+          "current_price": 9986.0,
+          "predicted_price": 10025.47,
+          "predicted_return_percent": 0.4000000059604645
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 56.73,
+            "signal": "Neutral"
+          },
+          "macd": {
+            "value": -8.58,
+            "signal": "Bearish"
+          },
+          "momentum_score": 4.0,
+          "trend_strength": 3.24,
+          "stochastic_k": 83.99,
+          "stochastic_d": 57.09,
+          "williams_r": -16.01,
+          "cmf": 0.51
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 15.22,
+          "price_to_book": 886.07,
+          "debt_to_equity": 125.9
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.0,
+          "social_sentiment_score": -0.15,
+          "sector_sentiment_score": 0.0,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 4.0
+        },
+        "recent_performance": {
+          "return_1d": 0.68,
+          "return_5d": -0.46,
+          "return_20d": -3.49
+        }
+      },
+      {
+        "symbol": "ENT.L",
+        "company_name": "Entain",
+        "overview": {
+          "current_price": 643.8,
+          "predicted_price": 646.16,
+          "predicted_return_percent": 0.3700000047683716
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 26.97,
+            "signal": "Oversold"
+          },
+          "macd": {
+            "value": -17.94,
+            "signal": "Bearish"
+          },
+          "momentum_score": 0.8,
+          "trend_strength": 0.0,
+          "stochastic_k": 17.73,
+          "stochastic_d": 18.96,
+          "williams_r": -82.27,
+          "cmf": -0.18
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.0,
+          "pe_ratio": 0.0,
+          "price_to_book": 266.25,
+          "debt_to_equity": 196.86
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.09,
+          "social_sentiment_score": 0.29,
+          "sector_sentiment_score": 0.05,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 5.5
+        },
+        "recent_performance": {
+          "return_1d": -2.61,
+          "return_5d": -2.7,
+          "return_20d": -8.42
+        }
+      },
+      {
+        "symbol": "AAF.L",
+        "company_name": "Airtel Africa",
+        "overview": {
+          "current_price": 165.1,
+          "predicted_price": 165.66,
+          "predicted_return_percent": 0.3400000035762787
+        },
+        "technical_analysis": {
+          "rsi": {
+            "value": 84.78,
+            "signal": "Overbought"
+          },
+          "macd": {
+            "value": 6.17,
+            "signal": "Bullish"
+          },
+          "momentum_score": 10.0,
+          "trend_strength": 8.42,
+          "stochastic_k": 95.04,
+          "stochastic_d": 95.25,
+          "williams_r": -4.96,
+          "cmf": 0.91
+        },
+        "fundamental_analysis": {
+          "market_cap_millions": 0.01,
+          "pe_ratio": 0.0,
+          "price_to_book": 257.57,
+          "debt_to_equity": 218.21
+        },
+        "market_sentiment": {
+          "news_sentiment_score": 0.02,
+          "social_sentiment_score": 0.17,
+          "sector_sentiment_score": 0.01,
+          "market_sentiment_score": -0.15,
+          "volatility_risk_score": 5.1
+        },
+        "recent_performance": {
+          "return_1d": -0.44,
+          "return_5d": 0.86,
+          "return_20d": 2.52
+        }
+      }
+    ]
+  },
+  {
     "date": "2025-03-25",
     "timestamp": "2025-03-25T21:46:59.037089",
     "market": "UK",
@@ -1743,413 +2180,6 @@
           "return_1d": -1.03,
           "return_5d": -0.36,
           "return_20d": -5.85
-        }
-      }
-    ]
-  },
-  {
-    "date": "2025-03-24",
-    "timestamp": "2025-03-24T20:56:18.010976",
-    "market": "UK",
-    "report": [
-      {
-        "symbol": "WPP.L",
-        "company_name": "WPP",
-        "overview": {
-          "current_price": 617.0,
-          "predicted_price": 647.36,
-          "predicted_return_percent": 4.920000076293945
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 49.21,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": -30.25,
-            "signal": "Bearish"
-          },
-          "momentum_score": 1.91,
-          "trend_strength": 0.0,
-          "stochastic_k": 27.56,
-          "stochastic_d": 44.65,
-          "williams_r": -72.44,
-          "cmf": -0.05
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.01,
-          "pe_ratio": 12.59,
-          "price_to_book": 191.56,
-          "debt_to_equity": 170.0
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.04,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -2.61,
-          "return_5d": -2.23,
-          "return_20d": -10.66
-        }
-      },
-      {
-        "symbol": "CRDA.L",
-        "company_name": "Croda International",
-        "overview": {
-          "current_price": 2893.0,
-          "predicted_price": 2931.78,
-          "predicted_return_percent": 1.340000033378601
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 28.39,
-            "signal": "Oversold"
-          },
-          "macd": {
-            "value": -72.12,
-            "signal": "Bearish"
-          },
-          "momentum_score": 0.46,
-          "trend_strength": 0.0,
-          "stochastic_k": 2.86,
-          "stochastic_d": 3.62,
-          "williams_r": -97.14,
-          "cmf": -1.63
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.0,
-          "pe_ratio": 17.32,
-          "price_to_book": 176.93,
-          "debt_to_equity": 30.44
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.1,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -0.99,
-          "return_5d": -6.24,
-          "return_20d": -7.01
-        }
-      },
-      {
-        "symbol": "GLEN.L",
-        "company_name": "Glencore",
-        "overview": {
-          "current_price": 302.9,
-          "predicted_price": 306.92,
-          "predicted_return_percent": 1.3300000429153442
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 42.18,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": -8.57,
-            "signal": "Bearish"
-          },
-          "momentum_score": 1.16,
-          "trend_strength": 0.0,
-          "stochastic_k": 13.13,
-          "stochastic_d": 6.32,
-          "williams_r": -86.87,
-          "cmf": -2.3
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.04,
-          "pe_ratio": 0.0,
-          "price_to_book": 90.55,
-          "debt_to_equity": 109.22
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.06,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": 0.01,
-          "return_5d": -5.0,
-          "return_20d": -5.07
-        }
-      },
-      {
-        "symbol": "IMB.L",
-        "company_name": "Imperial Brands",
-        "overview": {
-          "current_price": 2729.0,
-          "predicted_price": 2750.1,
-          "predicted_return_percent": 0.7699999809265137
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 34.22,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": -3.31,
-            "signal": "Bearish"
-          },
-          "momentum_score": 0.33,
-          "trend_strength": 6.31,
-          "stochastic_k": 28.07,
-          "stochastic_d": 21.91,
-          "williams_r": -71.93,
-          "cmf": 0.7
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.02,
-          "pe_ratio": 9.13,
-          "price_to_book": 419.72,
-          "debt_to_equity": 157.6
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.1,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -1.29,
-          "return_5d": -3.0,
-          "return_20d": -3.4
-        }
-      },
-      {
-        "symbol": "STAN.L",
-        "company_name": "Standard Chartered",
-        "overview": {
-          "current_price": 1178.0,
-          "predicted_price": 1185.85,
-          "predicted_return_percent": 0.6700000166893005
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 39.07,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": 7.57,
-            "signal": "Bullish"
-          },
-          "momentum_score": 4.48,
-          "trend_strength": 10.0,
-          "stochastic_k": 40.0,
-          "stochastic_d": 33.38,
-          "williams_r": -60.0,
-          "cmf": -0.17
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.03,
-          "pe_ratio": 11.11,
-          "price_to_book": 66.12,
-          "debt_to_equity": 0.0
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.01,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": 0.42,
-          "return_5d": -0.97,
-          "return_20d": -3.15
-        }
-      },
-      {
-        "symbol": "NWG.L",
-        "company_name": "NatWest Group",
-        "overview": {
-          "current_price": 462.7,
-          "predicted_price": 465.24,
-          "predicted_return_percent": 0.550000011920929
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 49.98,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": 4.6,
-            "signal": "Bullish"
-          },
-          "momentum_score": 6.42,
-          "trend_strength": 10.0,
-          "stochastic_k": 67.3,
-          "stochastic_d": 63.52,
-          "williams_r": -32.7,
-          "cmf": 1.41
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.04,
-          "pe_ratio": 8.9,
-          "price_to_book": 109.23,
-          "debt_to_equity": 0.0
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.19,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -0.14,
-          "return_5d": 0.24,
-          "return_20d": -1.5
-        }
-      },
-      {
-        "symbol": "SPX.L",
-        "company_name": "Spirax Group",
-        "overview": {
-          "current_price": 6715.0,
-          "predicted_price": 6750.98,
-          "predicted_return_percent": 0.5400000214576721
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 38.81,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": -196.68,
-            "signal": "Bearish"
-          },
-          "momentum_score": 1.57,
-          "trend_strength": 0.0,
-          "stochastic_k": 12.64,
-          "stochastic_d": 14.23,
-          "williams_r": -87.36,
-          "cmf": -1.2
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.01,
-          "pe_ratio": 25.93,
-          "price_to_book": 409.98,
-          "debt_to_equity": 84.81
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.14,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -0.98,
-          "return_5d": -3.68,
-          "return_20d": -7.88
-        }
-      },
-      {
-        "symbol": "GAW.L",
-        "company_name": "Games Workshop",
-        "overview": {
-          "current_price": 14540.0,
-          "predicted_price": 14603.25,
-          "predicted_return_percent": 0.4300000071525574
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 61.89,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": 85.23,
-            "signal": "Bullish"
-          },
-          "momentum_score": 7.58,
-          "trend_strength": 7.43,
-          "stochastic_k": 58.25,
-          "stochastic_d": 59.91,
-          "williams_r": -41.75,
-          "cmf": 0.54
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.0,
-          "pe_ratio": 27.43,
-          "price_to_book": 1659.25,
-          "debt_to_equity": 16.07
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.25,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -0.48,
-          "return_5d": -2.3,
-          "return_20d": -1.86
-        }
-      },
-      {
-        "symbol": "FRES.L",
-        "company_name": "Fresnillo plc",
-        "overview": {
-          "current_price": 927.5,
-          "predicted_price": 930.71,
-          "predicted_return_percent": 0.3499999940395355
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 80.67,
-            "signal": "Overbought"
-          },
-          "macd": {
-            "value": 48.83,
-            "signal": "Bullish"
-          },
-          "momentum_score": 10.0,
-          "trend_strength": 8.24,
-          "stochastic_k": 80.65,
-          "stochastic_d": 83.19,
-          "williams_r": -19.35,
-          "cmf": 2.19
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.01,
-          "pe_ratio": 61.83,
-          "price_to_book": 177.27,
-          "debt_to_equity": 20.27
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.13,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -0.12,
-          "return_5d": -2.49,
-          "return_20d": 5.6
-        }
-      },
-      {
-        "symbol": "VOD.L",
-        "company_name": "Vodafone Group",
-        "overview": {
-          "current_price": 72.0,
-          "predicted_price": 72.23,
-          "predicted_return_percent": 0.3199999928474426
-        },
-        "technical_analysis": {
-          "rsi": {
-            "value": 55.67,
-            "signal": "Neutral"
-          },
-          "macd": {
-            "value": 1.55,
-            "signal": "Bullish"
-          },
-          "momentum_score": 8.3,
-          "trend_strength": 10.0,
-          "stochastic_k": 47.25,
-          "stochastic_d": 73.72,
-          "williams_r": -52.75,
-          "cmf": 1.62
-        },
-        "fundamental_analysis": {
-          "market_cap_millions": 0.02,
-          "pe_ratio": 10.29,
-          "price_to_book": 32.26,
-          "debt_to_equity": 95.38
-        },
-        "market_sentiment": {
-          "news_sentiment_score": 0.08,
-          "volatility_risk_score": 10.0
-        },
-        "recent_performance": {
-          "return_1d": -5.18,
-          "return_5d": -4.24,
-          "return_20d": -1.13
         }
       }
     ]
